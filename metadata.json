@@ -1,0 +1,5 @@
+{
+  "name": "每日禁语 (Daily Forbidden Word)",
+  "description": "一个极具挑战性的社交对战游戏：每天随机抽取一个高频常用汉字作为'禁语'，在交谈或输入中误用该字即扣分。内置手动计分功能和真心话大冒险惩罚库。",
+  "requestFramePermissions": []
+}
