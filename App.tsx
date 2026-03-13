@@ -28,7 +28,10 @@ const App: React.FC = () => {
   const [playerRole, setPlayerRole] = useState<'FOX' | 'BUNNY' | null>(null);
 
   // 连接 Socket.io 服务器
-  const SERVER_URL = 'http://kadegou48.top:3001'; // 部署时改为服务器公网 IP
+  // 开发环境使用 localhost，生产环境使用当前域名（通过 Nginx 代理）
+  const SERVER_URL = import.meta.env.PROD
+    ? window.location.origin
+    : 'http://localhost:3001';
 
   useEffect(() => {
     if (!roomId) return;
