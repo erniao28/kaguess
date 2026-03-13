@@ -11,7 +11,7 @@ const __dirname = path.dirname(__filename);
 dotenv.config({ path: path.resolve(__dirname, '.env') });
 
 const app = express();
-app = app.use(cors());
+app.use(cors());
 
 const httpServer = createServer(app);
 const io = new Server(httpServer, {
