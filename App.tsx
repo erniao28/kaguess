@@ -170,6 +170,11 @@ const App: React.FC = () => {
     }, 500);
   };
 
+  const handleCreateRoom = (id: string) => {
+    setRoomId(id);
+    setGameState(GameState.SETUP);
+  };
+
   const handlePlayerReady = (player: Player, extraWords: ForbiddenWord[], customPunishments: PunishmentBanks) => {
     // 玩家点击“加入”或“领取角色”
     const newPlayers = players.map(p => p.type === player.type ? player : p);
@@ -267,7 +272,7 @@ const App: React.FC = () => {
         )}
       </div>
 
-      {gameState === GameState.ROOM && <SetupRoom onJoin={handleJoinRoom} onCreate={handleJoinRoom} />}
+      {gameState === GameState.ROOM && <SetupRoom onJoin={handleJoinRoom} onCreate={handleCreateRoom} onWaiting={() => {}} />}
 
       {gameState === GameState.SETUP && (
         <SetupScreen 

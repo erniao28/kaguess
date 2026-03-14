@@ -4,12 +4,10 @@ import { io, Socket } from 'socket.io-client';
 interface Props {
   onJoin: (id: string) => void;
   onCreate: (id: string) => void;
-  onWaiting?: (id: string) => void;
 }
 
-const SetupRoom: React.FC<Props> = ({ onJoin, onCreate, onWaiting }) => {
+const SetupRoom: React.FC<Props> = ({ onJoin, onCreate }) => {
   const [id, setId] = useState('');
-  const [waitingRoomId, setWaitingRoomId] = useState<string | null>(null);
   const [connecting, setConnecting] = useState(false);
 
   const SERVER_URL = window.location.origin;
@@ -28,8 +26,7 @@ const SetupRoom: React.FC<Props> = ({ onJoin, onCreate, onWaiting }) => {
 
     socket.on('room_created', (createdId: string) => {
       setConnecting(false);
-      setWaitingRoomId(createdId);
-      if (onWaiting) onWaiting(createdId);
+      onCreate(createdId);
     });
 
     socket.on('room_error', (error: string) => {
@@ -60,58 +57,6 @@ const SetupRoom: React.FC<Props> = ({ onJoin, onCreate, onWaiting }) => {
       alert(error);
     });
   };
-
-  const copyRoomId = () => {
-    if (waitingRoomId) {
-      navigator.clipboard.writeText(waitingRoomId);
-      alert('房间号已复制！');
-    }
-  };
-
-  // 等待页面
-  if (waitingRoomId) {
-    return (
-      <div className="bg-white rounded-[60px] shadow-[0_40px_100px_-20px_rgba(0,0,0,0.1)] p-12 max-w-lg w-full mt-10 border-8 border-slate-50 relative overflow-hidden text-center">
-        <div className="absolute -top-20 -left-20 text-[20rem] opacity-[0.03] select-none pointer-events-none">🏠</div>
-
-        <div className="mb-10">
-          <div className="w-20 h-20 bg-green-500 rounded-3xl mx-auto flex items-center justify-center text-4xl mb-6 shadow-2xl shadow-green-200">
-            ✨
-          </div>
-          <h2 className="text-4xl font-black text-slate-800 mb-2">房间创建成功！</h2>
-          <p className="text-slate-400 font-medium">分享房间号，等待朋友加入</p>
-        </div>
-
-        <div className="space-y-6">
-          <div className="w-full px-8 py-6 rounded-[30px] bg-indigo-50 border-4 border-indigo-200">
-            <p className="text-sm text-slate-500 font-bold mb-2 uppercase tracking-widest">房间号</p>
-            <p className="text-5xl font-black text-indigo-600 tracking-[0.2em]">{waitingRoomId}</p>
-          </div>
-
-          <button
-            onClick={copyRoomId}
-            className="w-full py-6 rounded-[30px] bg-indigo-600 text-white font-black text-2xl hover:bg-indigo-700 transition-all shadow-xl active:scale-95"
-          >
-            📋 复制房间号
-          </button>
-
-          <div className="relative py-4">
-            <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t border-slate-200"></div>
-            </div>
-            <div className="relative flex justify-center text-sm">
-              <span className="px-4 bg-white text-slate-400 font-bold">等待玩家加入中...</span>
-            </div>
-          </div>
-
-          <div className="flex items-center justify-center gap-4 text-slate-400">
-            <span className="animate-pulse">🟢</span>
-            <span className="font-medium">在线等待</span>
-          </div>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="bg-white rounded-[60px] shadow-[0_40px_100px_-20px_rgba(0,0,0,0.1)] p-12 max-w-lg w-full mt-10 border-8 border-slate-50 relative overflow-hidden text-center">
