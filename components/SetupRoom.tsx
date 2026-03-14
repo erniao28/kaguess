@@ -15,7 +15,7 @@ const SetupRoom: React.FC<Props> = ({ onJoin, onCreate, onWaiting }) => {
   const SERVER_URL = window.location.origin;
 
   const handleCreateRoom = () => {
-    const roomId = 'ROOM' + Math.floor(Math.random() * 10000).toString().padStart(4, '0');
+    const roomId = 'R' + Math.floor(Math.random() * 10000).toString().padStart(4, '0');
     setConnecting(true);
 
     const socket = io(SERVER_URL, {
@@ -131,7 +131,7 @@ const SetupRoom: React.FC<Props> = ({ onJoin, onCreate, onWaiting }) => {
           maxLength={6}
           value={id}
           onChange={(e) => setId(e.target.value.toUpperCase())}
-          placeholder="例如：ZPD001"
+          placeholder="例如：R1234"
           className="w-full px-8 py-6 rounded-[30px] bg-slate-50 border-4 border-slate-100 focus:border-indigo-500 outline-none text-center text-3xl font-black tracking-[0.2em] placeholder:tracking-normal placeholder:text-lg placeholder:font-bold transition-all"
         />
 
