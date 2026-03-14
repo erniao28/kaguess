@@ -63,18 +63,20 @@ io.on('connection', (socket) => {
     socket.data = { roomId, role: null };
 
     console.log(`玩家 ${socket.id} 加入房间：${roomId}`);
-    socket.emit('room_joined', roomId);
+    console.log(`房间状态 - fox: ${room.state.fox ? '已选择' : '未选择'}, bunny: ${room.state.bunny ? '已选择' : '未选择'}`);
 
-    // 同步房间状态给新玩家
-    socket.emit('sync_room', {
+    // 先通知房间内其他玩家有新玩家加入
+    socket.to(roomId).emit('player_joined', { socketId: socket.id });
+
+    // 再同步房间状态给新玩家（确保包含所有已选择的角色）
+    io.to(roomId).emit('sync_room', {
       fox: room.state.fox?.player,
       bunny: room.state.bunny?.player,
       foxReady: room.state.fox?.isReady,
       bunnyReady: room.state.bunny?.isReady
     });
 
-    // 通知房间内其他玩家
-    socket.to(roomId).emit('player_joined', { socketId: socket.id });
+    socket.emit('room_joined', roomId);
   });
 
   // 选择角色
