@@ -5,9 +5,11 @@ import { Player, ForbiddenWord, PunishmentBanks } from '../types';
 interface Props {
   players: Player[];
   onPlayerReady: (player: Player, extraWords: ForbiddenWord[], punishments: PunishmentBanks) => void;
+  onStartGame?: () => void;
+  canStart?: boolean;
 }
 
-const SetupScreen: React.FC<Props> = ({ players, onPlayerReady }) => {
+const SetupScreen: React.FC<Props> = ({ players, onPlayerReady, onStartGame, canStart = false }) => {
   const [nickName, setNickName] = useState('');
   const [judyName, setJudyName] = useState('');
   const [customWordsText, setCustomWordsText] = useState('');
@@ -152,10 +154,20 @@ const SetupScreen: React.FC<Props> = ({ players, onPlayerReady }) => {
       </div>
       
       <div className="mt-14 text-center">
-        <div className={`inline-flex items-center gap-5 px-14 py-6 rounded-full font-black text-2xl shadow-2xl transition-all duration-1000 ${(!fox.isReady || !bunny.isReady) ? 'bg-slate-200 text-slate-400' : 'bg-slate-900 text-white scale-110 animate-pulse'}`}>
-           <span className={`w-4 h-4 rounded-full ${(!fox.isReady || !bunny.isReady) ? 'bg-slate-300' : 'bg-green-500 shadow-[0_0_15px_#22c55e]'}`} />
-           {(!fox.isReady || !bunny.isReady) ? "正在等待队友通过验证..." : "全员到齐，行动开始！"}
-        </div>
+        {canStart ? (
+          <button
+            onClick={onStartGame}
+            className="inline-flex items-center gap-5 px-14 py-6 rounded-full font-black text-2xl shadow-2xl bg-gradient-to-r from-indigo-600 to-purple-600 text-white scale-110 hover:scale-105 active:scale-95 transition-all animate-pulse"
+          >
+            <span className="w-4 h-4 rounded-full bg-green-400 shadow-[0_0_15px_#22c55e]" />
+            🚀 开始行动！
+          </button>
+        ) : (
+          <div className="inline-flex items-center gap-5 px-14 py-6 rounded-full font-black text-2xl shadow-2xl transition-all duration-1000 bg-slate-200 text-slate-400">
+            <span className="w-4 h-4 rounded-full bg-slate-300" />
+            正在等待队友通过验证...
+          </div>
+        )}
       </div>
     </div>
   );

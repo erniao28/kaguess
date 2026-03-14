@@ -145,16 +145,7 @@ const App: React.FC = () => {
     };
   }, [roomId]);
 
-  // 监听玩家是否全部准备就绪
-  useEffect(() => {
-    if (gameState === GameState.SETUP && players.every(p => p.isReady) && playerRole === 'FOX') {
-      // 狐狸方自动开始游戏（服务器会处理 both_ready 事件）
-      const randomWord = FORBIDDEN_WORDS[Math.floor(Math.random() * FORBIDDEN_WORDS.length)];
-      socket?.emit('start_game', { roomId, word: randomWord, punishments: punishmentBanks });
-      setSessionWord(randomWord);
-      setGameState(GameState.TRANSITION);
-    }
-  }, [players, gameState, punishmentBanks, socket, roomId, playerRole]);
+  // 监听玩家是否全部准备就绪（服务器会发送 both_ready 事件）
 
   const triggerLocalEffect = (from: 'FOX' | 'BUNNY') => {
     const newEffect = { id: Date.now(), type: from === 'FOX' ? 'ICE' as const : 'TICKET' as const };
@@ -173,6 +164,13 @@ const App: React.FC = () => {
   const handleCreateRoom = (id: string) => {
     setRoomId(id);
     setGameState(GameState.SETUP);
+  };
+
+  const handleStartGame = () => {
+    const randomWord = FORBIDDEN_WORDS[Math.floor(Math.random() * FORBIDDEN_WORDS.length)];
+    socket?.emit('start_game', { roomId, word: randomWord, punishments: punishmentBanks });
+    setSessionWord(randomWord);
+    setGameState(GameState.TRANSITION);
   };
 
   const handlePlayerReady = (player: Player, extraWords: ForbiddenWord[], customPunishments: PunishmentBanks) => {
@@ -272,12 +270,14 @@ const App: React.FC = () => {
         )}
       </div>
 
-      {gameState === GameState.ROOM && <SetupRoom onJoin={handleJoinRoom} onCreate={handleCreateRoom} onWaiting={() => {}} />}
+      {gameState === GameState.ROOM && <SetupRoom onJoin={handleJoinRoom} onCreate={handleCreateRoom} />}
 
       {gameState === GameState.SETUP && (
-        <SetupScreen 
-          players={players} 
-          onPlayerReady={handlePlayerReady} 
+        <SetupScreen
+          players={players}
+          onPlayerReady={handlePlayerReady}
+          onStartGame={handleStartGame}
+          canStart={players.every(p => p.isReady) && playerRole === 'FOX'}
         />
       )}
 
