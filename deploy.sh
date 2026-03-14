@@ -16,7 +16,7 @@ YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
 # 项目路径
-PROJECT_ROOT="/root/kaguess"
+PROJECT_ROOT="/var/www/kaguess"
 BACKEND_DIR="${PROJECT_ROOT}/server"
 FRONTEND_DIST="${PROJECT_ROOT}/dist"
 NGINX_CONF="/etc/nginx/sites-available/kadegou48.top"
@@ -42,11 +42,11 @@ echo -e "${GREEN}前端构建完成${NC}"
 
 echo -e "${YELLOW}[4/6] 启动/重启 PM2 后端服务...${NC}"
 # 检查是否已存在服务
-if pm2 describe kaguess-backend > /dev/null 2>&1; then
-    pm2 restart kaguess-backend
+if pm2 describe kaguess-server > /dev/null 2>&1; then
+    pm2 restart kaguess-server
     echo -e "${GREEN}PM2 服务已重启${NC}"
 else
-    pm2 start index.js --name kaguess-backend
+    pm2 start index.js --name kaguess-server
     echo -e "${GREEN}PM2 服务已启动${NC}"
 fi
 
@@ -61,7 +61,7 @@ server {
     listen 80;
     server_name kadegou48.top www.kadegou48.top;
 
-    root /root/kaguess/dist;
+    root /var/www/kaguess/dist;
     index index.html;
 
     # 前端静态文件
@@ -117,5 +117,5 @@ echo "访问地址：http://kadegou48.top"
 echo ""
 echo "验证命令："
 echo "  pm2 status"
-echo "  pm2 logs kaguess-backend"
+echo "  pm2 logs kaguess-server"
 echo "  curl -I http://kadegou48.top"
