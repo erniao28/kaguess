@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { io, Socket } from 'socket.io-client';
 import { GameState, Player, ForbiddenWord, SyncMessage, PunishmentBanks } from './types';
 import { FORBIDDEN_WORDS, TRUTH_PUNISHMENTS, DARE_PUNISHMENTS } from './constants';
@@ -26,6 +26,17 @@ const App: React.FC = () => {
   const [effects, setEffects] = useState<{id: number, type: 'TICKET' | 'ICE'}[]>([]);
   const [socket, setSocket] = useState<Socket | null>(null);
   const [playerRole, setPlayerRole] = useState<'FOX' | 'BUNNY' | null>(null);
+  const playerRoleRef = useRef<'FOX' | 'BUNNY' | null>(null);
+  const punishmentBanksRef = useRef<PunishmentBanks>(punishmentBanks);
+
+  // 更新 ref 以保持最新值
+  useEffect(() => {
+    playerRoleRef.current = playerRole;
+  }, [playerRole]);
+
+  useEffect(() => {
+    punishmentBanksRef.current = punishmentBanks;
+  }, [punishmentBanks]);
 
   // 连接 Socket.io 服务器
   // 开发环境使用 localhost，生产环境使用当前域名（通过 Nginx 代理）
@@ -59,6 +70,10 @@ const App: React.FC = () => {
       console.log('加入房间成功:', id);
       // 加入房间时默认是兔子（因为狐狸已被创建者占用）
       setPlayerRole('BUNNY');
+      // 同时更新 players 状态，标记兔子已准备（等待玩家填写信息）
+      setPlayers(prev => prev.map(p =>
+        p.type === 'BUNNY' ? { ...p, isReady: false } : p
+      ));
     });
 
     newSocket.on('room_error', (error: string) => {
@@ -99,9 +114,9 @@ const App: React.FC = () => {
     newSocket.on('both_ready', () => {
       console.log('双方都已准备，可以开始游戏');
       // 狐狸方自动开始游戏
-      if (playerRole === 'FOX') {
+      if (playerRoleRef.current === 'FOX') {
         const randomWord = FORBIDDEN_WORDS[Math.floor(Math.random() * FORBIDDEN_WORDS.length)];
-        newSocket.emit('start_game', { roomId, word: randomWord, punishments: punishmentBanks });
+        newSocket.emit('start_game', { roomId, word: randomWord, punishments: punishmentBanksRef.current });
       }
     });
 
