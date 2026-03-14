@@ -57,6 +57,8 @@ const App: React.FC = () => {
 
     newSocket.on('room_joined', (id: string) => {
       console.log('加入房间成功:', id);
+      // 加入房间时默认是兔子（因为狐狸已被创建者占用）
+      setPlayerRole('BUNNY');
     });
 
     newSocket.on('room_error', (error: string) => {
