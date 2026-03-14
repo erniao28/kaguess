@@ -46,9 +46,13 @@ const App: React.FC = () => {
 
     newSocket.on('room_created', (id: string) => {
       console.log('房间创建成功:', id);
-      // 自动加入自己创建的房间
-      newSocket.emit('select_role', { roomId: id, role: 'fox', player: players[0] });
       setPlayerRole('FOX');
+      // 自动占用狐狸角色，设置默认名字
+      setPlayers(prev => prev.map(p =>
+        p.type === 'FOX' ? { ...p, name: '尼克', isReady: true } : p
+      ));
+      // 通知服务器占用狐狸角色
+      newSocket.emit('select_role', { roomId: id, role: 'fox', player: { ...players[0], name: '尼克', isReady: true } });
     });
 
     newSocket.on('room_joined', (id: string) => {

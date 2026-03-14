@@ -65,6 +65,14 @@ io.on('connection', (socket) => {
     console.log(`玩家 ${socket.id} 加入房间：${roomId}`);
     socket.emit('room_joined', roomId);
 
+    // 同步房间状态给新玩家
+    socket.emit('sync_room', {
+      fox: room.state.fox?.player,
+      bunny: room.state.bunny?.player,
+      foxReady: room.state.fox?.isReady,
+      bunnyReady: room.state.bunny?.isReady
+    });
+
     // 通知房间内其他玩家
     socket.to(roomId).emit('player_joined', { socketId: socket.id });
   });
