@@ -96,9 +96,10 @@ const App: React.FC = () => {
     });
 
     newSocket.on('sync_room', ({ fox, bunny, foxReady, bunnyReady }) => {
+      console.log('收到房间同步:', { fox, bunny, foxReady, bunnyReady });
       setPlayers(prev => prev.map(p => {
-        if (p.type === 'FOX' && fox) return { ...fox, type: 'FOX' as const, isReady: foxReady };
-        if (p.type === 'BUNNY' && bunny) return { ...bunny, type: 'BUNNY' as const, isReady: bunnyReady };
+        if (p.type === 'FOX' && fox) return { ...p, ...fox, type: 'FOX' as const, isReady: foxReady };
+        if (p.type === 'BUNNY' && bunny) return { ...p, ...bunny, type: 'BUNNY' as const, isReady: bunnyReady };
         return p;
       }));
     });
