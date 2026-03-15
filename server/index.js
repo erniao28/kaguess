@@ -70,8 +70,8 @@ io.on('connection', (socket) => {
 
     // 再同步房间状态给新玩家（确保包含所有已选择的角色）
     io.to(roomId).emit('sync_room', {
-      fox: room.state.fox?.player,
-      bunny: room.state.bunny?.player,
+      fox: room.state.fox ? { ...room.state.fox.player, socketId: room.state.fox.socketId } : null,
+      bunny: room.state.bunny ? { ...room.state.bunny.player, socketId: room.state.bunny.socketId } : null,
       foxReady: room.state.fox?.isReady,
       bunnyReady: room.state.bunny?.isReady
     });
@@ -112,8 +112,8 @@ io.on('connection', (socket) => {
 
     // 同步房间状态给所有玩家
     io.to(roomId).emit('sync_room', {
-      fox: room.state.fox?.player,
-      bunny: room.state.bunny?.player,
+      fox: room.state.fox ? { ...room.state.fox.player, socketId: room.state.fox.socketId } : null,
+      bunny: room.state.bunny ? { ...room.state.bunny.player, socketId: room.state.bunny.socketId } : null,
       foxReady: room.state.fox?.isReady,
       bunnyReady: room.state.bunny?.isReady
     });
@@ -198,8 +198,8 @@ io.on('connection', (socket) => {
         } else {
           // 同步剩余玩家状态
           io.to(roomId).emit('sync_room', {
-            fox: room.state.fox?.player,
-            bunny: room.state.bunny?.player,
+            fox: room.state.fox ? { ...room.state.fox.player, socketId: room.state.fox.socketId } : null,
+            bunny: room.state.bunny ? { ...room.state.bunny.player, socketId: room.state.bunny.socketId } : null,
             foxReady: room.state.fox?.isReady,
             bunnyReady: room.state.bunny?.isReady
           });

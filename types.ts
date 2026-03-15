@@ -14,6 +14,7 @@ export interface Player {
   score: number;
   type: 'FOX' | 'BUNNY';
   isReady: boolean;
+  socketId?: string;
 }
 
 export interface ForbiddenWord {

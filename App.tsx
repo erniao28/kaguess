@@ -68,9 +68,8 @@ const App: React.FC = () => {
 
     newSocket.on('room_joined', (id: string) => {
       console.log('加入房间成功:', id);
-      // 加入房间时默认是兔子（因为狐狸已被创建者占用）
-      setPlayerRole('BUNNY');
-      // 同时更新 players 状态，标记兔子已准备（等待玩家填写信息）
+      // 角色将由 sync_room 事件根据服务器返回的数据设置
+      // 这里只需要重置 players 状态，等待 sync_room 同步
       setPlayers(prev => prev.map(p =>
         p.type === 'BUNNY' ? { ...p, isReady: false } : p
       ));
@@ -97,6 +96,37 @@ const App: React.FC = () => {
 
     newSocket.on('sync_room', ({ fox, bunny, foxReady, bunnyReady }) => {
       console.log('收到房间同步:', { fox, bunny, foxReady, bunnyReady });
+
+      // 判断当前玩家的角色：如果 fox 的 socketId 是当前 socket，则当前玩家是 FOX；否则是 BUNNY
+      const currentSocketId = newSocket.id;
+      const isFox = fox?.socketId === currentSocketId;
+      const isBunny = bunny?.socketId === currentSocketId;
+
+      // 根据服务器返回的数据设置 playerRole
+      if (isFox && playerRoleRef.current !== 'FOX') {
+        console.log('同步角色：当前玩家是 FOX');
+        setPlayerRole('FOX');
+      } else if (isBunny && playerRoleRef.current !== 'BUNNY') {
+        console.log('同步角色：当前玩家是 BUNNY');
+        setPlayerRole('BUNNY');
+      } else if (!fox && !bunny) {
+        // 边缘情况：如果两个角色都没有被选择，且当前玩家还没有角色
+        // 这通常不会发生，但为了完整性，保持 playerRole 不变
+        console.log('房间中没有已选择的角色');
+      } else if (fox && !bunny && fox.socketId !== currentSocketId) {
+        // 狐狸已选择但不是当前玩家，当前玩家应该是兔子
+        if (playerRoleRef.current !== 'BUNNY') {
+          console.log('同步角色：当前玩家是 BUNNY（狐狸已被占用）');
+          setPlayerRole('BUNNY');
+        }
+      } else if (bunny && !fox && bunny.socketId !== currentSocketId) {
+        // 兔子已选择但不是当前玩家，当前玩家应该是狐狸
+        if (playerRoleRef.current !== 'FOX') {
+          console.log('同步角色：当前玩家是 FOX（兔子已被占用）');
+          setPlayerRole('FOX');
+        }
+      }
+
       setPlayers(prev => prev.map(p => {
         if (p.type === 'FOX' && fox) return { ...p, ...fox, type: 'FOX' as const, isReady: foxReady };
         if (p.type === 'BUNNY' && bunny) return { ...p, ...bunny, type: 'BUNNY' as const, isReady: bunnyReady };
@@ -130,6 +160,10 @@ const App: React.FC = () => {
     newSocket.on('game_message', (msg: SyncMessage) => {
       // 处理来自服务器的游戏消息
       switch (msg.type) {
+        case 'UPDATE_PLAYER':
+          // 同步对方玩家的数据
+          setPlayers(prev => prev.map(p => p.type === msg.player.type ? { ...p, ...msg.player } : p));
+          break;
         case 'ADD_SCORE':
           setPlayers(prev => prev.map(p => p.id === msg.playerId ? { ...p, score: Math.max(0, p.score + msg.delta) } : p));
           break;
@@ -213,8 +247,8 @@ const App: React.FC = () => {
     socket?.emit('player_ready', { roomId, role });
 
     // 发送同步消息
-    socket?.emit('game_message', { type: 'UPDATE_PLAYER', player });
-    socket?.emit('game_message', { type: 'SYNC_BANKS', extraWords, punishments: mergedPunishments });
+    socket?.emit('game_message', { roomId, message: { type: 'UPDATE_PLAYER', player } });
+    socket?.emit('game_message', { roomId, message: { type: 'SYNC_BANKS', extraWords, punishments: mergedPunishments } });
   };
 
   const handleUpdateScore = (id: number, delta: number) => {
