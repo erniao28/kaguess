@@ -138,6 +138,14 @@ io.on('connection', (socket) => {
       bunnyReady: room.state.bunny?.isReady
     });
 
+    // 同步房间状态给所有玩家（包含玩家信息）
+    io.to(roomId).emit('sync_room', {
+      fox: room.state.fox ? { ...room.state.fox.player, socketId: room.state.fox.socketId } : null,
+      bunny: room.state.bunny ? { ...room.state.bunny.player, socketId: room.state.bunny.socketId } : null,
+      foxReady: room.state.fox?.isReady,
+      bunnyReady: room.state.bunny?.isReady
+    });
+
     // 如果两人都准备好了，由服务器通知可以开始游戏
     if (room.state.fox?.isReady && room.state.bunny?.isReady) {
       io.to(roomId).emit('both_ready');
@@ -146,6 +154,26 @@ io.on('connection', (socket) => {
 
   // 游戏消息转发（玩家操作同步）
   socket.on('game_message', ({ roomId, message }) => {
+    const room = rooms.get(roomId);
+
+    // 如果是 UPDATE_PLAYER 消息，更新服务器上的玩家数据
+    if (room && message.type === 'UPDATE_PLAYER') {
+      const player = message.player;
+      if (player.type === 'FOX' && room.state.fox) {
+        room.state.fox.player = player;
+      } else if (player.type === 'BUNNY' && room.state.bunny) {
+        room.state.bunny.player = player;
+      }
+      // 重新广播 sync_room，确保所有玩家看到最新数据
+      io.to(roomId).emit('sync_room', {
+        fox: room.state.fox ? { ...room.state.fox.player, socketId: room.state.fox.socketId } : null,
+        bunny: room.state.bunny ? { ...room.state.bunny.player, socketId: room.state.bunny.socketId } : null,
+        foxReady: room.state.fox?.isReady,
+        bunnyReady: room.state.bunny?.isReady
+      });
+    }
+
+    // 转发给其他玩家
     socket.to(roomId).emit('game_message', message);
   });
 
