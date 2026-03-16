@@ -4,7 +4,11 @@
       "Bash(npm install:*)",
       "Bash(npm run:*)",
       "Bash(netstat:*)",
-      "Bash(curl:*)"
+      "Bash(curl:*)",
+      "Read(//mnt/e/file/project_ai/cc_test/test k project/game/**)",
+      "Bash(dir)",
+      "Bash(pm2 logs:*)",
+      "Bash(pm2 status:*)"
     ]
   }
 }
