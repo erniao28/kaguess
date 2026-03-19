@@ -84,18 +84,20 @@ io.on('connection', (socket) => {
     const room = rooms.get(roomId);
     if (!room) return;
 
-    // 检查角色是否已被占用
-    if (room.state.fox && room.state.fox.socketId !== socket.id &&
-        room.state.bunny && room.state.bunny.socketId !== socket.id) {
-      // 检查当前玩家是否已经选择了角色
-      if (socket.data.role) {
-        // 可以切换角色，先释放原角色
-        if (socket.data.role === 'fox') room.state.fox = null;
-        if (socket.data.role === 'bunny') room.state.bunny = null;
-      } else {
-        socket.emit('role_error', '该角色已被选择');
-        return;
-      }
+    // 检查目标角色是否已被其他玩家占用
+    if (role === 'fox' && room.state.fox && room.state.fox.socketId !== socket.id) {
+      socket.emit('role_error', '狐狸角色已被选择');
+      return;
+    }
+    if (role === 'bunny' && room.state.bunny && room.state.bunny.socketId !== socket.id) {
+      socket.emit('role_error', '兔子角色已被选择');
+      return;
+    }
+
+    // 如果当前玩家已经选择了其他角色，先释放原角色
+    if (socket.data.role && socket.data.role !== role) {
+      if (socket.data.role === 'fox') room.state.fox = null;
+      if (socket.data.role === 'bunny') room.state.bunny = null;
     }
 
     // 分配角色
