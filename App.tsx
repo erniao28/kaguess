@@ -336,7 +336,7 @@ const App: React.FC = () => {
           players={players}
           onPlayerReady={handlePlayerReady}
           onStartGame={handleStartGame}
-          canStart={players.every(p => p.isReady) && (playerRole === 'FOX' || (players[0].isReady && players[1].isReady))}
+          canStart={players.every(p => p.isReady)}
           foxTaken={players.find(p => p.type === 'FOX')?.isReady && players.find(p => p.type === 'FOX')?.name !== ''}
           bunnyTaken={players.find(p => p.type === 'BUNNY')?.isReady && players.find(p => p.type === 'BUNNY')?.name !== ''}
           playerRole={playerRole}
