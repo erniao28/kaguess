@@ -30,6 +30,9 @@ const SetupScreen: React.FC<Props> = ({
   const fox = players.find(p => p.type === 'FOX')!;
   const bunny = players.find(p => p.type === 'BUNNY')!;
 
+  // 单机模式：两个角色的 socketId 相同（都是当前玩家）
+  const isSinglePlayer = fox.socketId && bunny.socketId && fox.socketId === bunny.socketId;
+
   const handleReady = (type: 'FOX' | 'BUNNY') => {
     const p = type === 'FOX' ? fox : bunny;
     const name = type === 'FOX' ? nickName : judyName;
@@ -58,19 +61,19 @@ const SetupScreen: React.FC<Props> = ({
 
           <div className="space-y-6">
             {/* Nick Card */}
-            <div className={`p-8 rounded-[45px] border-4 transition-all duration-500 flex items-center gap-6 relative overflow-hidden ${fox.isReady ? 'bg-orange-500 border-orange-300 translate-x-4 shadow-2xl shadow-orange-100' : foxTaken ? 'bg-slate-200 border-slate-300 opacity-60' : 'bg-orange-50 border-orange-100 hover:scale-[1.02]'}`}>
+            <div className={`p-8 rounded-[45px] border-4 transition-all duration-500 flex items-center gap-6 relative overflow-hidden ${fox.isReady ? 'bg-orange-500 border-orange-300 translate-x-4 shadow-2xl shadow-orange-100' : foxTaken && !isSinglePlayer ? 'bg-slate-200 border-slate-300 opacity-60' : 'bg-orange-50 border-orange-100 hover:scale-[1.02]'}`}>
               <div className="text-8xl select-none">🦊</div>
               <div className="flex-1">
-                <h3 className={`text-3xl font-black mb-3 ${fox.isReady ? 'text-white' : foxTaken ? 'text-slate-500' : 'text-orange-800'}`}>狐尼克 · Nick</h3>
+                <h3 className={`text-3xl font-black mb-3 ${fox.isReady ? 'text-white' : foxTaken && !isSinglePlayer ? 'text-slate-500' : 'text-orange-800'}`}>狐尼克 · Nick</h3>
                 {fox.isReady ? (
                   <div className="bg-white/20 backdrop-blur-md px-6 py-2 rounded-2xl inline-block border border-white/30 animate-pulse">
                     <p className="text-white font-black italic">已就位：{fox.name}</p>
                   </div>
-                ) : foxTaken ? (
+                ) : foxTaken && !isSinglePlayer ? (
                   <div className="bg-slate-400/30 backdrop-blur-md px-6 py-2 rounded-2xl inline-block border border-slate-400/30">
                     <p className="text-slate-600 font-black italic">已被占用</p>
                   </div>
-                ) : playerRole === 'BUNNY' ? (
+                ) : playerRole === 'BUNNY' && !isSinglePlayer ? (
                   <div className="text-slate-400 font-black text-sm">请选择兔子角色</div>
                 ) : (
                   <div className="flex flex-col sm:flex-row gap-3">
@@ -82,7 +85,7 @@ const SetupScreen: React.FC<Props> = ({
                     />
                     <button
                       onClick={() => handleReady('FOX')}
-                      disabled={!nickName || foxTaken}
+                      disabled={!nickName || (foxTaken && !isSinglePlayer)}
                       className="bg-orange-600 text-white px-8 py-3 rounded-2xl font-black shadow-lg hover:bg-orange-700 transition-all active:scale-95 disabled:opacity-50"
                     >
                       认领
@@ -93,19 +96,19 @@ const SetupScreen: React.FC<Props> = ({
             </div>
 
             {/* Judy Card */}
-            <div className={`p-8 rounded-[45px] border-4 transition-all duration-500 flex items-center gap-6 relative overflow-hidden ${bunny.isReady ? 'bg-blue-600 border-blue-400 translate-x-4 shadow-2xl shadow-blue-100' : bunnyTaken ? 'bg-slate-200 border-slate-300 opacity-60' : 'bg-blue-50 border-blue-100 hover:scale-[1.02]'}`}>
+            <div className={`p-8 rounded-[45px] border-4 transition-all duration-500 flex items-center gap-6 relative overflow-hidden ${bunny.isReady ? 'bg-blue-600 border-blue-400 translate-x-4 shadow-2xl shadow-blue-100' : bunnyTaken && !isSinglePlayer ? 'bg-slate-200 border-slate-300 opacity-60' : 'bg-blue-50 border-blue-100 hover:scale-[1.02]'}`}>
               <div className="text-8xl select-none">🐰</div>
               <div className="flex-1">
-                <h3 className={`text-3xl font-black mb-3 ${bunny.isReady ? 'text-white' : bunnyTaken ? 'text-slate-500' : 'text-blue-800'}`}>朱迪 · Judy</h3>
+                <h3 className={`text-3xl font-black mb-3 ${bunny.isReady ? 'text-white' : bunnyTaken && !isSinglePlayer ? 'text-slate-500' : 'text-blue-800'}`}>朱迪 · Judy</h3>
                 {bunny.isReady ? (
                   <div className="bg-white/20 backdrop-blur-md px-6 py-2 rounded-2xl inline-block border border-white/30 animate-pulse">
                     <p className="text-white font-black italic">已出勤：{bunny.name}</p>
                   </div>
-                ) : bunnyTaken ? (
+                ) : bunnyTaken && !isSinglePlayer ? (
                   <div className="bg-slate-400/30 backdrop-blur-md px-6 py-2 rounded-2xl inline-block border border-slate-400/30">
                     <p className="text-slate-600 font-black italic">已被占用</p>
                   </div>
-                ) : playerRole === 'FOX' ? (
+                ) : playerRole === 'FOX' && !isSinglePlayer ? (
                   <div className="text-slate-400 font-black text-sm">请选择狐狸角色</div>
                 ) : (
                   <div className="flex flex-col sm:flex-row gap-3">
@@ -117,7 +120,7 @@ const SetupScreen: React.FC<Props> = ({
                     />
                     <button
                       onClick={() => handleReady('BUNNY')}
-                      disabled={!judyName || bunnyTaken}
+                      disabled={!judyName || (bunnyTaken && !isSinglePlayer)}
                       className="bg-blue-700 text-white px-8 py-3 rounded-2xl font-black shadow-lg hover:bg-blue-800 transition-all active:scale-95 disabled:opacity-50"
                     >
                       出勤

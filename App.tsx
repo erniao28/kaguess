@@ -102,8 +102,11 @@ const App: React.FC = () => {
       const isFox = fox?.socketId === currentSocketId;
       const isBunny = bunny?.socketId === currentSocketId;
 
-      // 根据服务器返回的数据设置 playerRole
-      if (isFox && playerRoleRef.current !== 'FOX') {
+      // 单机模式：两个角色都是当前玩家的
+      if (isFox && isBunny) {
+        console.log('单机模式：两个角色都是当前玩家的');
+        setPlayerRole('FOX');  // 保持 FOX 即可
+      } else if (isFox && playerRoleRef.current !== 'FOX') {
         console.log('同步角色：当前玩家是 FOX');
         setPlayerRole('FOX');
       } else if (isBunny && playerRoleRef.current !== 'BUNNY') {
@@ -333,7 +336,7 @@ const App: React.FC = () => {
           players={players}
           onPlayerReady={handlePlayerReady}
           onStartGame={handleStartGame}
-          canStart={players.every(p => p.isReady) && playerRole === 'FOX'}
+          canStart={players.every(p => p.isReady) && (playerRole === 'FOX' || (players[0].isReady && players[1].isReady))}
           foxTaken={players.find(p => p.type === 'FOX')?.isReady && players.find(p => p.type === 'FOX')?.name !== ''}
           bunnyTaken={players.find(p => p.type === 'BUNNY')?.isReady && players.find(p => p.type === 'BUNNY')?.name !== ''}
           playerRole={playerRole}
