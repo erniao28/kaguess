@@ -263,10 +263,12 @@ const App: React.FC = () => {
   };
 
   const handlePlayerReady = (player: Player, extraWords: ForbiddenWord[], customPunishments: PunishmentBanks) => {
-    // 玩家点击“加入”或“领取角色”
+    console.log('[HANDLE_PLAYER_READY] 玩家准备:', player);
+    // 玩家点击”加入”或”领取角色”
     const newPlayers = players.map(p => p.type === player.type ? player : p);
+    console.log('[HANDLE_PLAYER_READY] 本地 players 更新为:', newPlayers);
     setPlayers(newPlayers);
-    
+
     // 合并本地库
     const mergedPunishments = {
       truths: Array.from(new Set([...TRUTH_PUNISHMENTS, ...customPunishments.truths])),
@@ -276,6 +278,7 @@ const App: React.FC = () => {
 
     // 发送角色选择和准备状态到服务器
     const role = player.type === 'FOX' ? 'fox' : 'bunny';
+    console.log('[HANDLE_PLAYER_READY] 发送 select_role:', { roomId, role, player });
     socket?.emit('select_role', { roomId, role, player });
     socket?.emit('player_ready', { roomId, role });
 
