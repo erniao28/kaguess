@@ -131,10 +131,16 @@ const App: React.FC = () => {
       }
 
       setPlayers(prev => prev.map(p => {
-        if (p.type === 'FOX' && fox) return { ...p, ...fox, type: 'FOX' as const, isReady: foxReady };
-        if (p.type === 'BUNNY' && bunny) return { ...p, ...bunny, type: 'BUNNY' as const, isReady: bunnyReady };
+        // 如果服务器有该角色的数据，同步过来（包括 name, socketId 等）
+        if (p.type === 'FOX' && fox) {
+          return { ...p, ...fox, type: 'FOX' as const, isReady: foxReady !== undefined ? foxReady : p.isReady };
+        }
+        if (p.type === 'BUNNY' && bunny) {
+          return { ...p, ...bunny, type: 'BUNNY' as const, isReady: bunnyReady !== undefined ? bunnyReady : p.isReady };
+        }
         return p;
       }));
+      console.log('Players 更新后:', players);
     });
 
     newSocket.on('sync_ready', ({ foxReady, bunnyReady }) => {
@@ -337,8 +343,8 @@ const App: React.FC = () => {
           onPlayerReady={handlePlayerReady}
           onStartGame={handleStartGame}
           canStart={players.every(p => p.isReady)}
-          foxTaken={players.find(p => p.type === 'FOX')?.isReady && players.find(p => p.type === 'FOX')?.name !== ''}
-          bunnyTaken={players.find(p => p.type === 'BUNNY')?.isReady && players.find(p => p.type === 'BUNNY')?.name !== ''}
+          foxTaken={players.find(p => p.type === 'FOX')?.name !== ''}
+          bunnyTaken={players.find(p => p.type === 'BUNNY')?.name !== ''}
           playerRole={playerRole}
         />
       )}

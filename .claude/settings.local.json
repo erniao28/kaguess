@@ -15,7 +15,9 @@
       "Bash(scp:*)",
       "Bash(cd:*)",
       "Bash(ls:*)",
-      "Bash(git:*)"
+      "Bash(git:*)",
+      "Bash(findstr :3001)",
+      "Bash(node index.js)"
     ]
   }
 }
