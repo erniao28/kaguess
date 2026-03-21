@@ -56,14 +56,16 @@ const App: React.FC = () => {
     });
 
     newSocket.on('room_created', (id: string) => {
-      console.log('房间创建成功:', id);
+      console.log('[ROOM_CREATED] 房间创建成功:', id);
       setPlayerRole('FOX');
       // 自动占用狐狸角色，设置默认名字
+      const foxPlayer = { id: 1, name: '尼克', score: 0, type: 'FOX' as const, isReady: true };
       setPlayers(prev => prev.map(p =>
-        p.type === 'FOX' ? { ...p, name: '尼克', isReady: true } : p
+        p.type === 'FOX' ? foxPlayer : p
       ));
+      console.log('[ROOM_CREATED] 发送 select_role:', { roomId: id, role: 'fox', player: foxPlayer });
       // 通知服务器占用狐狸角色
-      newSocket.emit('select_role', { roomId: id, role: 'fox', player: { ...players[0], name: '尼克', isReady: true } });
+      newSocket.emit('select_role', { roomId: id, role: 'fox', player: foxPlayer });
     });
 
     newSocket.on('room_joined', (id: string) => {

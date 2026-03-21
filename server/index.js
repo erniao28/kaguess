@@ -84,31 +84,39 @@ io.on('connection', (socket) => {
   // 选择角色
   socket.on('select_role', ({ roomId, role, player }) => {
     const room = rooms.get(roomId);
-    if (!room) return;
+    if (!room) {
+      console.log(`[SELECT_ROLE] 房间 ${roomId} 不存在`);
+      return;
+    }
 
     console.log(`[SELECT_ROLE] 玩家 ${socket.id} 尝试选择角色：${role}, 房间状态：fox=${room.state.fox ? room.state.fox.socketId : 'null'}, bunny=${room.state.bunny ? room.state.bunny.socketId : 'null'}`);
 
     // 检查目标角色是否已被**其他**玩家占用
     if (role === 'fox' && room.state.fox && room.state.fox.socketId !== socket.id) {
       socket.emit('role_error', '狐狸角色已被选择');
+      console.log(`[SELECT_ROLE] 角色 ${role} 已被其他玩家占用`);
       return;
     }
     if (role === 'bunny' && room.state.bunny && room.state.bunny.socketId !== socket.id) {
       socket.emit('role_error', '兔子角色已被选择');
+      console.log(`[SELECT_ROLE] 角色 ${role} 已被其他玩家占用`);
       return;
     }
 
     // 分配角色（允许同一玩家选择两个角色 - 单机模式）
+    // 保留玩家传来的 isReady 状态
     if (role === 'fox') {
-      room.state.fox = { socketId: socket.id, player, isReady: false };
+      room.state.fox = { socketId: socket.id, player, isReady: player.isReady || false };
+      console.log(`[SELECT_ROLE] 分配狐狸角色，isReady=${player.isReady}`);
     } else if (role === 'bunny') {
-      room.state.bunny = { socketId: socket.id, player, isReady: false };
+      room.state.bunny = { socketId: socket.id, player, isReady: player.isReady || false };
+      console.log(`[SELECT_ROLE] 分配兔子角色，isReady=${player.isReady}`);
     }
 
     socket.data.role = role;
     socket.data.player = player;
 
-    console.log(`[SELECT_ROLE] 玩家 ${socket.id} 成功选择角色：${role}, 玩家名字：${player.name}`);
+    console.log(`[SELECT_ROLE] 玩家 ${socket.id} 成功选择角色：${role}, 玩家名字：${player.name}, isReady: ${player.isReady}`);
 
     // 同步房间状态给所有玩家（包括发送者）
     const syncData = {
