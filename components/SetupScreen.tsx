@@ -120,7 +120,7 @@ const SetupScreen: React.FC<Props> = ({
                     />
                     <button
                       onClick={() => handleReady('BUNNY')}
-                      disabled={!judyName || (bunnyTaken && !canChooseBoth)}
+                      disabled={!judyName || (bunnyIsTaken && !canChooseBoth)}
                       className="bg-blue-700 text-white px-8 py-3 rounded-2xl font-black shadow-lg hover:bg-blue-800 transition-all active:scale-95 disabled:opacity-50"
                     >
                       出勤
