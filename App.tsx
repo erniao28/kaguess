@@ -44,27 +44,26 @@ const App: React.FC = () => {
     ? window.location.origin
     : 'http://localhost:3001';
 
+  // 在组件挂载时创建 socket，而不是等 roomId 设置后
   useEffect(() => {
-    if (!roomId) return;
-
-    console.log('[SOCKET_INIT] 初始化 socket 连接，roomId:', roomId);
+    console.log('[SOCKET_INIT] 初始化 socket 连接');
     const newSocket = io(SERVER_URL, {
       transports: ['websocket', 'polling']
     });
 
     newSocket.on('connect', () => {
-      console.log('[SOCKET] 已连接服务器:', newSocket.id, 'roomId:', roomId);
+      console.log('[SOCKET] 已连接服务器:', newSocket.id);
     });
 
     newSocket.on('connect_error', (err) => {
       console.error('[SOCKET] 连接错误:', err);
     });
 
-    // 注册所有事件监听器
-    console.log('[SOCKET] 注册事件监听器...');
-
+    // 房间创建成功
     newSocket.on('room_created', (id: string) => {
       console.log('[ROOM_CREATED] 房间创建成功:', id);
+      setRoomId(id);
+      setGameState(GameState.SETUP);
       setPlayerRole('FOX');
       // 自动占用狐狸角色，设置默认名字
       const foxPlayer = { id: 1, name: '尼克', score: 0, type: 'FOX' as const, isReady: true };
@@ -76,35 +75,32 @@ const App: React.FC = () => {
       newSocket.emit('select_role', { roomId: id, role: 'fox', player: foxPlayer });
     });
 
+    // 加入房间成功
     newSocket.on('room_joined', (id: string) => {
-      console.log('加入房间成功:', id);
+      console.log('[ROOM_JOINED] 加入房间成功:', id);
+      setGameState(GameState.SETUP);
       // 角色将由 sync_room 事件根据服务器返回的数据设置
-      // 这里只需要重置 players 状态，等待 sync_room 同步
-      setPlayers(prev => prev.map(p =>
-        p.type === 'BUNNY' ? { ...p, isReady: false } : p
-      ));
     });
 
     newSocket.on('room_error', (error: string) => {
       alert(error);
     });
 
-    newSocket.on('player_joined', ({ socketId }) => {
-      console.log('新玩家加入:', socketId);
-    });
+    setSocket(newSocket);
 
-    newSocket.on('player_left', ({ role }) => {
-      alert(`${role === 'fox' ? '狐狸' : '兔子'} 已断开连接`);
-      setPlayers(prev => prev.map(p =>
-        p.type === role.toUpperCase() ? { ...p, name: '', isReady: false } : p
-      ));
-    });
+    return () => {
+      newSocket.close();
+    };
+  }, []);
 
-    newSocket.on('role_error', (error: string) => {
-      alert(error);
-    });
+  // roomId 设置后，注册游戏相关事件
+  useEffect(() => {
+    if (!roomId || !socket) return;
 
-    newSocket.on('sync_room', (data) => {
+    console.log('[SOCKET] 注册游戏事件，roomId:', roomId);
+
+    // 同步房间状态
+    socket.on('sync_room', (data) => {
       console.log('[SYNC_ROOM] <<<< 收到服务器同步数据 >>>>');
       console.log('[SYNC_ROOM] 原始数据:', JSON.stringify(data, null, 2));
 
@@ -112,7 +108,7 @@ const App: React.FC = () => {
       console.log('[SYNC_ROOM] 解析后:', { fox, bunny, foxReady, bunnyReady });
 
       // 判断当前玩家的角色：如果 fox 的 socketId 是当前 socket，则当前玩家是 FOX；否则是 BUNNY
-      const currentSocketId = newSocket.id;
+      const currentSocketId = socket.id;
       const isFox = fox?.socketId === currentSocketId;
       const isBunny = bunny?.socketId === currentSocketId;
       console.log('[SYNC_ROOM] isFox:', isFox, 'isBunny:', isBunny);
@@ -177,7 +173,7 @@ const App: React.FC = () => {
       });
     });
 
-    newSocket.on('sync_ready', ({ foxReady, bunnyReady }) => {
+    socket.on('sync_ready', ({ foxReady, bunnyReady }) => {
       setPlayers(prev => prev.map(p => {
         if (p.type === 'FOX') return { ...p, isReady: foxReady };
         if (p.type === 'BUNNY') return { ...p, isReady: bunnyReady };
@@ -185,22 +181,22 @@ const App: React.FC = () => {
       }));
     });
 
-    newSocket.on('both_ready', () => {
+    socket.on('both_ready', () => {
       console.log('双方都已准备，可以开始游戏');
       // 狐狸方自动开始游戏
       if (playerRoleRef.current === 'FOX') {
         const randomWord = FORBIDDEN_WORDS[Math.floor(Math.random() * FORBIDDEN_WORDS.length)];
-        newSocket.emit('start_game', { roomId, word: randomWord, punishments: punishmentBanksRef.current });
+        socket.emit('start_game', { roomId, word: randomWord, punishments: punishmentBanksRef.current });
       }
     });
 
-    newSocket.on('start_game', ({ word, punishments }) => {
+    socket.on('start_game', ({ word, punishments }) => {
       setSessionWord(word);
       setPunishmentBanks(punishments);
       setGameState(GameState.TRANSITION);
     });
 
-    newSocket.on('game_message', (msg: SyncMessage) => {
+    socket.on('game_message', (msg: SyncMessage) => {
       // 处理来自服务器的游戏消息
       switch (msg.type) {
         case 'UPDATE_PLAYER':
@@ -227,20 +223,42 @@ const App: React.FC = () => {
       }
     });
 
-    newSocket.on('settle_game', () => {
+    socket.on('settle_game', () => {
       setShowPunishment(true);
     });
 
-    newSocket.on('reset_game', () => {
+    socket.on('reset_game', () => {
       setGameState(GameState.SETUP);
       setPlayers(prev => prev.map(item => ({...item, score: 0, isReady: false, name: ''})));
       setShowPunishment(false);
     });
 
-    setSocket(newSocket);
+    socket.on('player_joined', ({ socketId }) => {
+      console.log('新玩家加入:', socketId);
+    });
+
+    socket.on('player_left', ({ role }) => {
+      alert(`${role === 'fox' ? '狐狸' : '兔子'} 已断开连接`);
+      setPlayers(prev => prev.map(p =>
+        p.type === role.toUpperCase() ? { ...p, name: '', isReady: false } : p
+      ));
+    });
+
+    socket.on('role_error', (error: string) => {
+      alert(error);
+    });
 
     return () => {
-      newSocket.close();
+      socket.off('sync_room');
+      socket.off('sync_ready');
+      socket.off('both_ready');
+      socket.off('start_game');
+      socket.off('game_message');
+      socket.off('settle_game');
+      socket.off('reset_game');
+      socket.off('player_joined');
+      socket.off('player_left');
+      socket.off('role_error');
     };
   }, [roomId]);
 
@@ -253,16 +271,13 @@ const App: React.FC = () => {
   };
 
   const handleJoinRoom = (id: string) => {
-    setRoomId(id);
-    setGameState(GameState.SETUP);
-    setTimeout(() => {
-      socket?.emit('join_room', id);
-    }, 500);
+    // roomId 和 gameState 会在 room_joined 事件中设置
+    console.log('[APP] 用户点击加入房间:', id);
   };
 
   const handleCreateRoom = (id: string) => {
-    setRoomId(id);
-    setGameState(GameState.SETUP);
+    // roomId 和 gameState 会在 room_created 事件中设置
+    console.log('[APP] 用户点击创建房间');
   };
 
   const handleStartGame = () => {
@@ -372,7 +387,7 @@ const App: React.FC = () => {
         )}
       </div>
 
-      {gameState === GameState.ROOM && <SetupRoom onJoin={handleJoinRoom} onCreate={handleCreateRoom} />}
+      {gameState === GameState.ROOM && <SetupRoom socket={socket} onJoin={handleJoinRoom} onCreate={handleCreateRoom} />}
 
       {gameState === GameState.SETUP && (
         <SetupScreen
