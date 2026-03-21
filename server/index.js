@@ -62,19 +62,21 @@ io.on('connection', (socket) => {
     socket.join(roomId);
     socket.data = { roomId, role: null };
 
-    console.log(`玩家 ${socket.id} 加入房间：${roomId}`);
-    console.log(`房间状态 - fox: ${room.state.fox ? '已选择' : '未选择'}, bunny: ${room.state.bunny ? '已选择' : '未选择'}`);
+    console.log(`[JOIN_ROOM] 玩家 ${socket.id} 加入房间：${roomId}`);
+    console.log(`[JOIN_ROOM] 房间状态 - fox: ${room.state.fox ? `已选择 (socket: ${room.state.fox.socketId}, name: ${room.state.fox.player?.name})` : '未选择'}, bunny: ${room.state.bunny ? `已选择 (socket: ${room.state.bunny.socketId}, name: ${room.state.bunny.player?.name})` : '未选择'}`);
 
     // 先通知房间内其他玩家有新玩家加入
     socket.to(roomId).emit('player_joined', { socketId: socket.id });
 
     // 再同步房间状态给新玩家（确保包含所有已选择的角色）
-    io.to(roomId).emit('sync_room', {
+    const syncData = {
       fox: room.state.fox ? { ...room.state.fox.player, socketId: room.state.fox.socketId } : null,
       bunny: room.state.bunny ? { ...room.state.bunny.player, socketId: room.state.bunny.socketId } : null,
       foxReady: room.state.fox?.isReady,
       bunnyReady: room.state.bunny?.isReady
-    });
+    };
+    console.log(`[JOIN_ROOM] 同步房间状态给新玩家:`, JSON.stringify(syncData));
+    io.to(roomId).emit('sync_room', syncData);
 
     socket.emit('room_joined', roomId);
   });
@@ -83,6 +85,8 @@ io.on('connection', (socket) => {
   socket.on('select_role', ({ roomId, role, player }) => {
     const room = rooms.get(roomId);
     if (!room) return;
+
+    console.log(`[SELECT_ROLE] 玩家 ${socket.id} 尝试选择角色：${role}, 房间状态：fox=${room.state.fox ? room.state.fox.socketId : 'null'}, bunny=${room.state.bunny ? room.state.bunny.socketId : 'null'}`);
 
     // 检查目标角色是否已被**其他**玩家占用
     if (role === 'fox' && room.state.fox && room.state.fox.socketId !== socket.id) {
@@ -104,15 +108,17 @@ io.on('connection', (socket) => {
     socket.data.role = role;
     socket.data.player = player;
 
-    console.log(`玩家 ${socket.id} 选择角色：${role}`);
+    console.log(`[SELECT_ROLE] 玩家 ${socket.id} 成功选择角色：${role}, 玩家名字：${player.name}`);
 
-    // 同步房间状态给所有玩家
-    io.to(roomId).emit('sync_room', {
+    // 同步房间状态给所有玩家（包括发送者）
+    const syncData = {
       fox: room.state.fox ? { ...room.state.fox.player, socketId: room.state.fox.socketId } : null,
       bunny: room.state.bunny ? { ...room.state.bunny.player, socketId: room.state.bunny.socketId } : null,
       foxReady: room.state.fox?.isReady,
       bunnyReady: room.state.bunny?.isReady
-    });
+    };
+    console.log(`[SELECT_ROLE] 广播 sync_room:`, JSON.stringify(syncData));
+    io.to(roomId).emit('sync_room', syncData);
   });
 
   // 玩家准备

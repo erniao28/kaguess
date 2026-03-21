@@ -95,7 +95,12 @@ const App: React.FC = () => {
     });
 
     newSocket.on('sync_room', ({ fox, bunny, foxReady, bunnyReady }) => {
-      console.log('收到房间同步:', { fox, bunny, foxReady, bunnyReady });
+      console.log('[SYNC_ROOM] 收到房间同步:', {
+        fox: JSON.stringify(fox),
+        bunny: JSON.stringify(bunny),
+        foxReady,
+        bunnyReady
+      });
 
       // 判断当前玩家的角色：如果 fox 的 socketId 是当前 socket，则当前玩家是 FOX；否则是 BUNNY
       const currentSocketId = newSocket.id;
@@ -130,17 +135,36 @@ const App: React.FC = () => {
         }
       }
 
-      setPlayers(prev => prev.map(p => {
-        // 如果服务器有该角色的数据，同步过来（包括 name, socketId 等）
-        if (p.type === 'FOX' && fox) {
-          return { ...p, ...fox, type: 'FOX' as const, isReady: foxReady !== undefined ? foxReady : p.isReady };
-        }
-        if (p.type === 'BUNNY' && bunny) {
-          return { ...p, ...bunny, type: 'BUNNY' as const, isReady: bunnyReady !== undefined ? bunnyReady : p.isReady };
-        }
-        return p;
-      }));
-      console.log('Players 更新后:', players);
+      // 关键修复：只要有服务器数据，就同步到本地状态
+      setPlayers(prev => {
+        const updated = prev.map(p => {
+          // 狐狸角色：如果服务器有 fox 数据，同步过来（包括 name, socketId 等）
+          if (p.type === 'FOX' && fox) {
+            const synced = {
+              ...p,
+              ...fox,
+              type: 'FOX' as const,
+              isReady: foxReady !== undefined ? foxReady : p.isReady
+            };
+            console.log('[SYNC_ROOM] 同步 FOX 数据:', synced);
+            return synced;
+          }
+          // 兔子角色：如果服务器有 bunny 数据，同步过来
+          if (p.type === 'BUNNY' && bunny) {
+            const synced = {
+              ...p,
+              ...bunny,
+              type: 'BUNNY' as const,
+              isReady: bunnyReady !== undefined ? bunnyReady : p.isReady
+            };
+            console.log('[SYNC_ROOM] 同步 BUNNY 数据:', synced);
+            return synced;
+          }
+          return p;
+        });
+        console.log('[SYNC_ROOM] Players 更新后:', updated);
+        return updated;
+      });
     });
 
     newSocket.on('sync_ready', ({ foxReady, bunnyReady }) => {
