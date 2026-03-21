@@ -47,13 +47,21 @@ const App: React.FC = () => {
   useEffect(() => {
     if (!roomId) return;
 
+    console.log('[SOCKET_INIT] 初始化 socket 连接，roomId:', roomId);
     const newSocket = io(SERVER_URL, {
       transports: ['websocket', 'polling']
     });
 
     newSocket.on('connect', () => {
-      console.log('已连接服务器:', newSocket.id);
+      console.log('[SOCKET] 已连接服务器:', newSocket.id, 'roomId:', roomId);
     });
+
+    newSocket.on('connect_error', (err) => {
+      console.error('[SOCKET] 连接错误:', err);
+    });
+
+    // 注册所有事件监听器
+    console.log('[SOCKET] 注册事件监听器...');
 
     newSocket.on('room_created', (id: string) => {
       console.log('[ROOM_CREATED] 房间创建成功:', id);
@@ -96,18 +104,18 @@ const App: React.FC = () => {
       alert(error);
     });
 
-    newSocket.on('sync_room', ({ fox, bunny, foxReady, bunnyReady }) => {
-      console.log('[SYNC_ROOM] 收到房间同步:', {
-        fox: JSON.stringify(fox),
-        bunny: JSON.stringify(bunny),
-        foxReady,
-        bunnyReady
-      });
+    newSocket.on('sync_room', (data) => {
+      console.log('[SYNC_ROOM] <<<< 收到服务器同步数据 >>>>');
+      console.log('[SYNC_ROOM] 原始数据:', JSON.stringify(data, null, 2));
+
+      const { fox, bunny, foxReady, bunnyReady } = data;
+      console.log('[SYNC_ROOM] 解析后:', { fox, bunny, foxReady, bunnyReady });
 
       // 判断当前玩家的角色：如果 fox 的 socketId 是当前 socket，则当前玩家是 FOX；否则是 BUNNY
       const currentSocketId = newSocket.id;
       const isFox = fox?.socketId === currentSocketId;
       const isBunny = bunny?.socketId === currentSocketId;
+      console.log('[SYNC_ROOM] isFox:', isFox, 'isBunny:', isBunny);
 
       // 单机模式：两个角色都是当前玩家的
       if (isFox && isBunny) {
