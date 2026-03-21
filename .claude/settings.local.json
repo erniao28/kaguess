@@ -12,7 +12,10 @@
       "Bash(ssh:*)",
       "Bash(git add:*)",
       "Bash(git push:*)",
-      "Bash(scp:*)"
+      "Bash(scp:*)",
+      "Bash(cd:*)",
+      "Bash(ls:*)",
+      "Bash(git:*)"
     ]
   }
 }
