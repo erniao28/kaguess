@@ -15,46 +15,70 @@ const SetupRoom: React.FC<Props> = ({ onJoin, onCreate }) => {
   const handleCreateRoom = () => {
     const roomId = 'R' + Math.floor(Math.random() * 10000).toString().padStart(4, '0');
     setConnecting(true);
+    console.log('[SETUP_ROOM] 尝试创建房间:', roomId);
 
     const socket = io(SERVER_URL, {
       transports: ['websocket', 'polling']
     });
 
+    console.log('[SETUP_ROOM] Socket 创建，ID:', socket.id);
+
     socket.on('connect', () => {
+      console.log('[SETUP_ROOM] Socket 已连接，发送 create_room');
       socket.emit('create_room', roomId);
     });
 
     socket.on('room_created', (createdId: string) => {
+      console.log('[SETUP_ROOM] 房间创建成功:', createdId);
       setConnecting(false);
       onCreate(createdId);
     });
 
     socket.on('room_error', (error: string) => {
+      console.error('[SETUP_ROOM] 房间创建错误:', error);
       setConnecting(false);
       alert(error);
+    });
+
+    socket.on('connect_error', (err) => {
+      console.error('[SETUP_ROOM] 连接错误:', err);
+      setConnecting(false);
+      alert('连接失败：' + err.message);
     });
   };
 
   const handleJoinRoom = () => {
     if (!id) return;
     setConnecting(true);
+    console.log('[SETUP_ROOM] 尝试加入房间:', id);
 
     const socket = io(SERVER_URL, {
       transports: ['websocket', 'polling']
     });
 
+    console.log('[SETUP_ROOM] Socket 创建，ID:', socket.id);
+
     socket.on('connect', () => {
+      console.log('[SETUP_ROOM] Socket 已连接，发送 join_room:', id);
       socket.emit('join_room', id);
     });
 
     socket.on('room_joined', () => {
+      console.log('[SETUP_ROOM] 房间加入成功:', id);
       setConnecting(false);
       onJoin(id);
     });
 
     socket.on('room_error', (error: string) => {
+      console.error('[SETUP_ROOM] 房间加入错误:', error);
       setConnecting(false);
       alert(error);
+    });
+
+    socket.on('connect_error', (err) => {
+      console.error('[SETUP_ROOM] 连接错误:', err);
+      setConnecting(false);
+      alert('连接失败：' + err.message);
     });
   };
 
