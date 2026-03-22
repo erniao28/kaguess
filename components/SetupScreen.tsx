@@ -26,9 +26,9 @@ const SetupScreen: React.FC<Props> = ({
   const fox = players.find(p => p.type === 'FOX')!;
   const bunny = players.find(p => p.type === 'BUNNY')!;
 
-  // 直接使用 name 判断占用
-  const foxIsTaken = fox.name !== '';
-  const bunnyIsTaken = bunny.name !== '';
+  // 使用 isReady 判断占用：只有当用户点击"认领"按钮后，角色才被锁定
+  const foxIsTaken = fox.isReady;
+  const bunnyIsTaken = bunny.isReady;
 
   // 单机模式：狐狸已选择且当前玩家是狐狸，但兔子还没选择
   const canChooseBoth = fox.isReady && playerRole === 'FOX' && !bunny.isReady;
@@ -81,7 +81,7 @@ const SetupScreen: React.FC<Props> = ({
                   <div className="bg-slate-400/30 backdrop-blur-md px-6 py-2 rounded-2xl inline-block border border-slate-400/30">
                     <p className="text-slate-600 font-black italic">已被占用</p>
                   </div>
-                ) : playerRole === 'BUNNY' && !canChooseBoth ? (
+                ) : playerRole === 'BUNNY' && !canChooseBoth && !foxIsTaken ? (
                   <div className="text-slate-400 font-black text-sm">请选择兔子角色</div>
                 ) : (
                   <div className="flex flex-col sm:flex-row gap-3">
@@ -124,7 +124,7 @@ const SetupScreen: React.FC<Props> = ({
                   <div className="bg-slate-400/30 backdrop-blur-md px-6 py-2 rounded-2xl inline-block border border-slate-400/30">
                     <p className="text-slate-600 font-black italic">已被占用</p>
                   </div>
-                ) : playerRole === 'FOX' && !canChooseBoth ? (
+                ) : playerRole === 'FOX' && !canChooseBoth && !bunnyIsTaken ? (
                   <div className="text-slate-400 font-black text-sm">请选择狐狸角色</div>
                 ) : (
                   <div className="flex flex-col sm:flex-row gap-3">

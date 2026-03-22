@@ -166,8 +166,15 @@ io.on('connection', (socket) => {
   socket.on('game_message', ({ roomId, message }) => {
     const room = rooms.get(roomId);
 
+    if (!room) {
+      console.log(`[GAME_MESSAGE] 房间 ${roomId} 不存在`);
+      return;
+    }
+
+    console.log(`[GAME_MESSAGE] 收到消息：${message.type}`, message);
+
     // 如果是 UPDATE_PLAYER 消息，更新服务器上的玩家数据
-    if (room && message.type === 'UPDATE_PLAYER') {
+    if (message.type === 'UPDATE_PLAYER') {
       const player = message.player;
       if (player.type === 'FOX' && room.state.fox) {
         room.state.fox.player = player;
@@ -183,6 +190,27 @@ io.on('connection', (socket) => {
       });
     }
 
+    // 如果是 SYNC_BANKS 消息，合并存储到服务器
+    if (message.type === 'SYNC_BANKS') {
+      const { extraWords, punishments } = message;
+
+      // 合并惩罚库（去重）
+      if (room.state.punishments) {
+        room.state.punishments.truths = Array.from(new Set([
+          ...room.state.punishments.truths,
+          ...punishments.truths
+        ]));
+        room.state.punishments.dares = Array.from(new Set([
+          ...room.state.punishments.dares,
+          ...punishments.dares
+        ]));
+      } else {
+        room.state.punishments = punishments;
+      }
+
+      console.log(`[SYNC_BANKS] 合并后的惩罚库：truths=${room.state.punishments.truths.length}, dares=${room.state.punishments.dares.length}`);
+    }
+
     // 转发给其他玩家
     socket.to(roomId).emit('game_message', message);
   });
@@ -192,11 +220,28 @@ io.on('connection', (socket) => {
     const room = rooms.get(roomId);
     if (!room) return;
 
+    // 存储词汇（以第一个触发者的为准）
     room.state.word = word;
-    room.state.punishments = punishments;
 
-    console.log(`房间 ${roomId} 游戏开始`);
-    io.to(roomId).emit('start_game', { word, punishments });
+    // 如果客户端传了惩罚库，也合并进去（确保包含默认库）
+    if (punishments) {
+      if (room.state.punishments) {
+        room.state.punishments.truths = Array.from(new Set([
+          ...room.state.punishments.truths,
+          ...punishments.truths
+        ]));
+        room.state.punishments.dares = Array.from(new Set([
+          ...room.state.punishments.dares,
+          ...punishments.dares
+        ]));
+      } else {
+        room.state.punishments = punishments;
+      }
+    }
+
+    const finalPunishments = room.state.punishments || { truths: [], dares: [] };
+    console.log(`房间 ${roomId} 游戏开始，词汇：${word.char}, 惩罚库：truths=${finalPunishments.truths.length}, dares=${finalPunishments.dares.length}`);
+    io.to(roomId).emit('start_game', { word, punishments: finalPunishments });
   });
 
   // 结算游戏

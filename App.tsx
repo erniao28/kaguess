@@ -54,10 +54,7 @@ const App: React.FC = () => {
       console.log('[ROOM] 创建成功:', id);
       setRoomId(id);
       setGameState(GameState.SETUP);
-      setPlayerRole('FOX');
-      const foxPlayer = { id: 1, name: '尼克', score: 0, type: 'FOX' as const, isReady: true };
-      setPlayers(prev => prev.map(p => p.type === 'FOX' ? foxPlayer : p));
-      newSocket.emit('select_role', { roomId: id, role: 'fox', player: foxPlayer });
+      // 创建房间时不自动选择角色，等待用户在 SetupScreen 中手动选择
     });
 
     newSocket.on('room_joined', (id: string) => {
@@ -89,6 +86,9 @@ const App: React.FC = () => {
         setPlayerRole('BUNNY'); // 狐狸被占了，我只能是兔子
       } else if (bunny && !fox && bunny.socketId !== currentSocketId) {
         setPlayerRole('FOX'); // 兔子被占了，我只能是狐狸
+      } else if (!fox && !bunny && playerRoleRef.current === null) {
+        // 两个角色都没被选择，当前用户也没有角色，可以自由选择（默认显示两个选项）
+        // 不设置 playerRole，让 SetupScreen 显示两个角色供选择
       }
 
       // 同步玩家数据 - 关键：只要有数据就同步
@@ -135,6 +135,7 @@ const App: React.FC = () => {
     });
 
     newSocket.on('start_game', ({ word, punishments }) => {
+      console.log('[START_GAME] 收到数据:', { word, punishments });
       setSessionWord(word);
       setPunishmentBanks(punishments);
       setGameState(GameState.TRANSITION);
@@ -160,7 +161,12 @@ const App: React.FC = () => {
           setShowPunishment(false);
           break;
         case 'SYNC_BANKS':
-          setPunishmentBanks(msg.punishments);
+          console.log('[SYNC_BANKS] 收到惩罚库同步:', { truths: msg.punishments.truths.length, dares: msg.punishments.dares.length });
+          // 合并惩罚库，而不是覆盖
+          setPunishmentBanks(prev => ({
+            truths: Array.from(new Set([...prev.truths, ...msg.punishments.truths])),
+            dares: Array.from(new Set([...prev.dares, ...msg.punishments.dares]))
+          }));
           break;
       }
     });
@@ -233,11 +239,11 @@ const App: React.FC = () => {
 
   const handleUpdateScore = (id: number, delta: number) => {
     setPlayers(prev => prev.map(p => p.id === id ? { ...p, score: Math.max(0, p.score + delta) } : p));
-    socket?.emit('game_message', { type: 'ADD_SCORE', playerId: id, delta });
+    socket?.emit('game_message', { roomId, message: { type: 'ADD_SCORE', playerId: id, delta } });
     if (delta > 0) {
       const player = players.find(p => p.id === id);
       if (player) {
-        socket?.emit('game_message', { type: 'ATTACK_EFFECT', from: player.type });
+        socket?.emit('game_message', { roomId, message: { type: 'ATTACK_EFFECT', from: player.type } });
         triggerLocalEffect(player.type);
       }
     }
