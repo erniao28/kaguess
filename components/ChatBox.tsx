@@ -5,9 +5,10 @@ interface ChatBoxProps {
   messages: ChatMessage[];
   onSendMessage: (content: string, type: 'text' | 'emoji' | 'image') => void;
   isConnected: boolean;
+  mySocketId?: string | null;
 }
 
-const ChatBox: React.FC<ChatBoxProps> = ({ messages, onSendMessage, isConnected }) => {
+const ChatBox: React.FC<ChatBoxProps> = ({ messages, onSendMessage, isConnected, mySocketId }) => {
   const [inputValue, setInputValue] = useState('');
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [showImagePreview, setShowImagePreview] = useState<string | null>(null);
@@ -27,11 +28,18 @@ const ChatBox: React.FC<ChatBoxProps> = ({ messages, onSendMessage, isConnected 
 
     // 判断消息类型
     let type: 'text' | 'emoji' | 'image' = 'text';
-    if (EMOJI_LIST.includes(inputValue.trim())) {
+    const trimmed = inputValue.trim();
+
+    // 如果是 base64 图片
+    if (trimmed.startsWith('data:image/')) {
+      type = 'image';
+    }
+    // 如果全是表情符号（可以多个）
+    else if (/^[\p{Emoji}]+$/u.test(trimmed)) {
       type = 'emoji';
     }
 
-    onSendMessage(inputValue.trim(), type);
+    onSendMessage(trimmed, type);
     setInputValue('');
     setShowEmojiPicker(false);
   };
@@ -140,7 +148,7 @@ const ChatBox: React.FC<ChatBoxProps> = ({ messages, onSendMessage, isConnected 
           </div>
         ) : (
           messages.map((msg) => {
-            const isMe = msg.senderId === 'me';
+            const isMe = mySocketId ? msg.senderId === mySocketId : false;
             return (
               <div
                 key={msg.id}

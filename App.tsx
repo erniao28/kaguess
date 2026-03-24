@@ -30,6 +30,7 @@ const App: React.FC = () => {
   const playerRoleRef = useRef<'FOX' | 'BUNNY' | null>(null);
   const punishmentBanksRef = useRef<PunishmentBanks>(punishmentBanks);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+  const [mySocketId, setMySocketId] = useState<string | null>(null);
 
   useEffect(() => {
     playerRoleRef.current = playerRole;
@@ -49,6 +50,7 @@ const App: React.FC = () => {
 
     newSocket.on('connect', () => {
       console.log('[SOCKET] 已连接:', newSocket.id);
+      setMySocketId(newSocket.id);
     });
 
     // 房间事件
@@ -270,23 +272,20 @@ const App: React.FC = () => {
   };
 
   const handleSendMessage = (content: string, type: 'text' | 'emoji' | 'image') => {
-    if (!socket || !roomId) return;
+    if (!socket || !roomId || !socket.connected) return;
 
     const player = players.find(p => p.type === playerRole);
     const message: ChatMessage = {
-      id: `msg-${Date.now()}`,
-      senderId: socket.id || 'me',
-      senderName: player?.name || '我',
+      id: `msg-${Date.now()}-${Math.random()}`,
+      senderId: socket.id,
+      senderName: player?.name || '玩家',
       senderRole: playerRole || undefined,
       content,
       type,
       timestamp: Date.now()
     };
 
-    // 先添加到本地列表
-    setChatMessages(prev => [...prev, message]);
-
-    // 发送到服务器
+    // 发送到服务器（不本地添加，等服务器广播回来）
     socket.emit('chat_message', { roomId, message });
   };
 
@@ -408,6 +407,7 @@ const App: React.FC = () => {
               messages={chatMessages}
               onSendMessage={handleSendMessage}
               isConnected={!!socket?.connected && !!roomId}
+              mySocketId={mySocketId}
             />
           </div>
         </div>
