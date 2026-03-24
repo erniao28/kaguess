@@ -29,7 +29,7 @@ export interface PunishmentBanks {
   dares: string[];
 }
 
-export type SyncMessage = 
+export type SyncMessage =
   | { type: 'UPDATE_PLAYER', player: Player }
   | { type: 'START_GAME', word: ForbiddenWord, punishments: PunishmentBanks }
   | { type: 'ADD_SCORE', playerId: number, delta: number }
@@ -37,3 +37,20 @@ export type SyncMessage =
   | { type: 'RESET_GAME' }
   | { type: 'ATTACK_EFFECT', from: 'FOX' | 'BUNNY' }
   | { type: 'SYNC_BANKS', extraWords: ForbiddenWord[], punishments: PunishmentBanks };
+
+export interface ChatMessage {
+  id: string;
+  senderId: string;
+  senderName: string;
+  senderRole?: 'FOX' | 'BUNNY';
+  content: string;
+  type: 'text' | 'emoji' | 'image';
+  timestamp: number;
+}
+
+export const EMOJI_LIST = [
+  '😀', '😂', '😍', '🥰', '😎', '🤔', '😏', '😜',
+  '👍', '👎', '👏', '🙌', '🔥', '✨', '💯', '💪',
+  '🦊', '🐰', '🥕', '🍗', '❤️', '💔', '⭐', '🌟',
+  '🎉', '🎊', '📄', '🍡', '🚔', '💤', '😴', '🙄'
+];

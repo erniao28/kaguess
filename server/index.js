@@ -215,6 +215,24 @@ io.on('connection', (socket) => {
     socket.to(roomId).emit('game_message', message);
   });
 
+  // 聊天消息
+  socket.on('chat_message', ({ roomId, message }) => {
+    const room = rooms.get(roomId);
+
+    if (!room) {
+      console.log(`[CHAT_MESSAGE] 房间 ${roomId} 不存在`);
+      return;
+    }
+
+    console.log(`[CHAT_MESSAGE] 收到聊天消息：${message.type}`, {
+      sender: message.senderName,
+      role: message.senderRole
+    });
+
+    // 广播给房间内所有玩家（包括发送者）
+    io.to(roomId).emit('chat_message', message);
+  });
+
   // 开始游戏（由先准备好的一方触发，服务器统一分发）
   socket.on('start_game', ({ roomId, word, punishments }) => {
     const room = rooms.get(roomId);

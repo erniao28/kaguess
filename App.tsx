@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { io, Socket } from 'socket.io-client';
-import { GameState, Player, ForbiddenWord, SyncMessage, PunishmentBanks } from './types';
+import { GameState, Player, ForbiddenWord, SyncMessage, PunishmentBanks, ChatMessage, EMOJI_LIST } from './types';
 import { FORBIDDEN_WORDS, TRUTH_PUNISHMENTS, DARE_PUNISHMENTS } from './constants';
 import SetupRoom from './components/SetupRoom';
 import SetupScreen from './components/SetupScreen';
@@ -9,6 +9,7 @@ import ForbiddenWordCard from './components/ForbiddenWordCard';
 import ScoreBoard from './components/ScoreBoard';
 import PunishmentModal from './components/PunishmentModal';
 import TransitionOverlay from './components/TransitionOverlay';
+import ChatBox from './components/ChatBox';
 
 const App: React.FC = () => {
   const [gameState, setGameState] = useState<GameState>(GameState.ROOM);
@@ -28,6 +29,7 @@ const App: React.FC = () => {
   const [playerRole, setPlayerRole] = useState<'FOX' | 'BUNNY' | null>(null);
   const playerRoleRef = useRef<'FOX' | 'BUNNY' | null>(null);
   const punishmentBanksRef = useRef<PunishmentBanks>(punishmentBanks);
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
 
   useEffect(() => {
     playerRoleRef.current = playerRole;
@@ -179,6 +181,18 @@ const App: React.FC = () => {
       setShowPunishment(false);
     });
 
+    // 聊天消息
+    newSocket.on('chat_message', (message: ChatMessage) => {
+      console.log('[CHAT_MESSAGE] 收到聊天消息:', message);
+      setChatMessages(prev => {
+        // 避免重复添加
+        if (prev.some(msg => msg.id === message.id)) {
+          return prev;
+        }
+        return [...prev, message];
+      });
+    });
+
     return () => {
       newSocket.off('connect');
       newSocket.off('room_created');
@@ -194,6 +208,7 @@ const App: React.FC = () => {
       newSocket.off('game_message');
       newSocket.off('settle_game');
       newSocket.off('reset_game');
+      newSocket.off('chat_message');
     };
   }, []);
 
@@ -253,6 +268,34 @@ const App: React.FC = () => {
     setShowPunishment(true);
     socket?.emit('settle_game', { roomId });
   };
+
+  const handleSendMessage = (content: string, type: 'text' | 'emoji' | 'image') => {
+    if (!socket || !roomId) return;
+
+    const player = players.find(p => p.type === playerRole);
+    const message: ChatMessage = {
+      id: `msg-${Date.now()}`,
+      senderId: socket.id || 'me',
+      senderName: player?.name || '我',
+      senderRole: playerRole || undefined,
+      content,
+      type,
+      timestamp: Date.now()
+    };
+
+    // 先添加到本地列表
+    setChatMessages(prev => [...prev, message]);
+
+    // 发送到服务器
+    socket.emit('chat_message', { roomId, message });
+  };
+
+  // 进入房间时清空聊天消息
+  useEffect(() => {
+    if (gameState === GameState.ROOM) {
+      setChatMessages([]);
+    }
+  }, [gameState]);
 
   const loser = players[0].score > players[1].score ? players[0] : players[1].score > players[0].score ? players[1] : null;
 
@@ -357,6 +400,15 @@ const App: React.FC = () => {
             <div className="lg:col-span-3 lg:sticky lg:top-8 order-3">
               <ScoreBoard player={players[1]} onUpdateScore={handleUpdateScore} />
             </div>
+          </div>
+
+          {/* 聊天框 */}
+          <div className="max-w-2xl mx-auto">
+            <ChatBox
+              messages={chatMessages}
+              onSendMessage={handleSendMessage}
+              isConnected={!!socket?.connected && !!roomId}
+            />
           </div>
         </div>
       )}
