@@ -21,7 +21,8 @@
       "Bash(tar -czf dist.tar.gz dist/)",
       "Bash(grep -o \"room_created.*select_role.*FOX\" dist/assets/*.js)",
       "Bash(grep -o 'name:\"\"\"\"\"\"\"\"' dist/assets/*.js)",
-      "Bash(grep -o 'name:\"\"\"\"尼克\"\"\"\"' dist/assets/*.js)"
+      "Bash(grep -o 'name:\"\"\"\"尼克\"\"\"\"' dist/assets/*.js)",
+      "Bash(tar:*)"
     ]
   }
 }

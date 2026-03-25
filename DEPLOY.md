@@ -266,6 +266,48 @@ netstat -tlnp | grep -E "3001|80"
 
 ---
 
+## 部署验证流程（重要！）
+
+### 每次部署后必须验证代码一致性
+
+```bash
+# 1. 本地获取信息
+md5sum dist/assets/*.js
+git log -1 --format='%H %s'
+
+# 2. 服务器获取信息
+ssh kaguess "cd /var/www/kaguess && md5sum dist/assets/*.js && git log -1 --format='%H %s'"
+
+# 3. 对比验证
+# - JS Hash 必须一致
+# - Git Commit 必须一致
+```
+
+| 项目 | 本地 | 服务器 | 状态 |
+|------|------|--------|------|
+| JS Hash | `xxx` | `xxx` | ✅/❌ |
+| Git Commit | `xxx` | `xxx` | ✅/❌ |
+
+---
+
+## 常见问题
+
+**Q: 服务器 git pull 失败（网络超时）**
+
+A: 使用 scp 上传 dist，然后同步 Git 状态：
+```bash
+# 本地构建
+npm run build
+
+# scp 上传 dist
+scp -i ~/.ssh/id_kaguess_ai -r dist/* root@121.40.35.46:/var/www/kaguess/dist/
+
+# 服务器同步 Git 状态
+ssh kaguess "cd /var/www/kaguess && git fetch origin && git reset --hard origin/master"
+```
+
+---
+
 ## 旧版部署指南（开发环境，不推荐生产使用）
 
 ### 1. 服务器要求

@@ -17,9 +17,8 @@ git log -1 --format='%H %s'
 # SSH 登录服务器
 ssh kaguess
 
-# 构建并获取信息
+# 获取信息
 cd /var/www/kaguess
-npm run build
 md5sum dist/assets/*.js
 git log -1 --format='%H %s'
 ```
@@ -39,13 +38,19 @@ git add -A && git commit -m "xxx"
 # 2. 推送到 GitHub
 git push origin master
 
-# 3. 服务器拉取并构建
+# 3. 服务器拉取并构建（优先）
 ssh kaguess "cd /var/www/kaguess && git pull && npm run build"
 
-# 4. 重启 PM2（如需要）
+# 如果 git pull 失败，使用 scp 上传 dist
+scp -i ~/.ssh/id_kaguess_ai -r dist/* root@kaguess:/var/www/kaguess/dist/
+
+# 4. 同步服务器 Git 状态（如果用了 scp）
+ssh kaguess "cd /var/www/kaguess && git fetch origin && git reset --hard origin/master"
+
+# 5. 重启 PM2（如需要）
 ssh kaguess "pm2 restart kaguess-server"
 
-# 5. 验证一致性（必须！）
+# 6. 验证一致性（必须！）
 ```
 
 ## 常见问题
@@ -55,3 +60,6 @@ A: 重新安装依赖：`rm -rf node_modules && npm install`
 
 **Q: git pull 冲突**
 A: `git reset --hard origin/master` 然后重新构建
+
+**Q: GitHub 连接超时**
+A: 使用 `scp` 上传 `dist/`，然后用 `git fetch + git reset` 同步 Git 状态
