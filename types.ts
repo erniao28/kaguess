@@ -71,3 +71,9 @@ export interface Background {
 }
 
 export type RoomMode = 'public' | 'private';
+
+export interface CarrotAward {
+  winnerRole: 'FOX' | 'BUNNY';
+  winnerSocketId: string;
+  carrotCount: number;
+}

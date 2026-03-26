@@ -41,6 +41,9 @@ const App: React.FC = () => {
   const [showPrivateRoomModal, setShowPrivateRoomModal] = useState(false);
   const [showRoomSettings, setShowRoomSettings] = useState(false);
   const [backgrounds, setBackgrounds] = useState<Background[]>([]);
+  const [myCarrotCount, setMyCarrotCount] = useState(0);
+  const [showCarrotAward, setShowCarrotAward] = useState(false);
+  const [carrotAwardData, setCarrotAwardData] = useState<CarrotAward | null>(null);
 
   useEffect(() => {
     playerRoleRef.current = playerRole;
@@ -245,6 +248,21 @@ const App: React.FC = () => {
       setBackgrounds(list);
     });
 
+    // 胡萝卜事件
+    newSocket.on('carrot_awarded', (data: CarrotAward) => {
+      console.log('[CARROT] 胡萝卜奖励:', data);
+      setCarrotAwardData(data);
+      setShowCarrotAward(true);
+
+      // 如果是自己获得胡萝卜，更新计数
+      if (data.winnerSocketId === mySocketId) {
+        setMyCarrotCount(data.carrotCount);
+      }
+
+      // 3 秒后自动关闭
+      setTimeout(() => setShowCarrotAward(false), 3000);
+    });
+
     return () => {
       newSocket.off('connect');
       newSocket.off('room_created');
@@ -267,6 +285,7 @@ const App: React.FC = () => {
       newSocket.off('room_bg_updated');
       newSocket.off('room_password_updated');
       newSocket.off('backgrounds_list');
+      newSocket.off('carrot_awarded');
     };
   }, []);
 
@@ -324,7 +343,23 @@ const App: React.FC = () => {
 
   const handleSettle = () => {
     setShowPunishment(true);
+
+    // 计算胜利者（分数低的赢）
+    const foxScore = players.find(p => p.type === 'FOX')?.score || 0;
+    const bunnyScore = players.find(p => p.type === 'BUNNY')?.score || 0;
+
+    let winnerRole: 'FOX' | 'BUNNY' | null = null;
+    if (foxScore < bunnyScore) {
+      winnerRole = 'FOX';
+    } else if (bunnyScore < foxScore) {
+      winnerRole = 'BUNNY';
+    }
+
+    // 发送结算事件（包括胡萝卜奖励）
     socket?.emit('settle_game', { roomId });
+    if (winnerRole) {
+      socket?.emit('settle_game_with_carrot', { roomId, winnerRole });
+    }
   };
 
   const handleSendMessage = (content: string, type: 'text' | 'emoji' | 'image') => {
@@ -387,6 +422,34 @@ const App: React.FC = () => {
           className="fixed inset-0 bg-cover bg-center opacity-20 z-0"
           style={{ backgroundImage: `url(${roomBgImage})` }}
         />
+      )}
+
+      {/* 胡萝卜奖励动画 */}
+      {showCarrotAward && carrotAwardData && (
+        <div className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-50 animate-in zoom-in-95 duration-500">
+          <div className="bg-white rounded-[40px] shadow-2xl border-8 border-yellow-400 px-12 py-8 text-center">
+            <div className="text-8xl mb-4 animate-bounce">🥕</div>
+            <div className="text-3xl font-black text-slate-800 mb-2">
+              {carrotAwardData.winnerSocketId === mySocketId ? '你赢了！' : `${carrotAwardData.winnerRole === 'FOX' ? '狐狸' : '兔子'} 获胜！`}
+            </div>
+            <div className="text-xl font-bold text-yellow-600">
+              +1 胡萝卜（累计 {carrotAwardData.carrotCount} 根）
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 个人胡萝卜数量显示 */}
+      {myCarrotCount > 0 && gameState === GameState.PLAYING && (
+        <div className="fixed top-6 right-6 z-40 animate-in fade-in slide-in-from-right-8 duration-700">
+          <div className="bg-white rounded-full shadow-xl border-4 border-yellow-400 px-6 py-3 flex items-center gap-3">
+            <span className="text-4xl">🥕</span>
+            <div>
+              <div className="text-xs font-bold text-slate-400">我的胡萝卜</div>
+              <div className="text-2xl font-black text-yellow-600 leading-none">{myCarrotCount}</div>
+            </div>
+          </div>
+        </div>
       )}
 
       {effects.map(effect => (

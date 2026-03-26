@@ -5,7 +5,7 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { roomOps, messageOps, backgroundOps } from './db.js';
+import { roomOps, messageOps, backgroundOps, carrotOps } from './db.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -230,8 +230,14 @@ io.on('connection', (socket) => {
       role: message.senderRole
     });
 
-    // 保存到数据库
-    messageOps.add(roomId, message);
+    // 保存到数据库（仅私密房间，普通房间跳过）
+    if (room.isPrivate) {
+      try {
+        messageOps.add(roomId, message);
+      } catch (err) {
+        console.error('[CHAT_MESSAGE] 保存失败:', err);
+      }
+    }
 
     // 广播给房间内所有玩家（包括发送者）
     io.to(roomId).emit('chat_message', message);
@@ -394,6 +400,43 @@ io.on('connection', (socket) => {
       url: bg.url,
       isPreset: bg.is_preset === 1
     })));
+  });
+
+  // 胡萝卜相关事件
+  // 结算游戏时给胜利方加胡萝卜
+  socket.on('settle_game_with_carrot', ({ roomId, winnerRole }) => {
+    const room = rooms.get(roomId);
+    if (!room) return;
+
+    console.log(`[CARROT] 结算游戏，胜利者：${winnerRole}`);
+
+    // 根据角色获取玩家标识（使用 socketId 作为唯一标识）
+    let winnerSocketId = null;
+    if (winnerRole === 'FOX' && room.state.fox) {
+      winnerSocketId = room.state.fox.socketId;
+    } else if (winnerRole === 'BUNNY' && room.state.bunny) {
+      winnerSocketId = room.state.bunny.socketId;
+    }
+
+    if (winnerSocketId) {
+      // 给胜利者加胡萝卜
+      carrotOps.addCarrot(winnerSocketId, 1);
+      const count = carrotOps.getCount(winnerSocketId);
+      console.log(`[CARROT] 玩家 ${winnerSocketId} 获得胡萝卜，总数：${count}`);
+
+      // 通知所有玩家
+      io.to(roomId).emit('carrot_awarded', {
+        winnerRole,
+        winnerSocketId,
+        carrotCount: count
+      });
+    }
+  });
+
+  // 获取玩家的胡萝卜数量
+  socket.on('get_carrot_count', (playerIdentifier) => {
+    const count = carrotOps.getCount(playerIdentifier);
+    socket.emit('carrot_count', { playerIdentifier, count });
   });
 
   // 开始游戏（由先准备好的一方触发，服务器统一分发）

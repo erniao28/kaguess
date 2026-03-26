@@ -40,9 +40,18 @@ db.exec(`
     is_preset INTEGER DEFAULT 1
   );
 
+  -- 玩家胡萝卜记录表（按玩家标识记录）
+  CREATE TABLE IF NOT EXISTS player_carrots (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    player_identifier TEXT UNIQUE NOT NULL,
+    carrot_count INTEGER DEFAULT 0,
+    last_updated INTEGER DEFAULT (strftime('%s', 'now'))
+  );
+
   -- 创建索引
   CREATE INDEX IF NOT EXISTS idx_messages_room_id ON messages(room_id);
   CREATE INDEX IF NOT EXISTS idx_messages_timestamp ON messages(timestamp);
+  CREATE INDEX IF NOT EXISTS idx_player_carrots_identifier ON player_carrots(player_identifier);
 `);
 
 // 插入预设背景（如果不存在）
@@ -177,6 +186,39 @@ export const backgroundOps = {
   deleteCustom: (id) => {
     const stmt = db.prepare('DELETE FROM backgrounds WHERE id = ? AND is_preset = 0');
     return stmt.run(id);
+  },
+};
+
+// 胡萝卜操作
+export const carrotOps = {
+  // 获取玩家胡萝卜数量
+  getCount: (playerIdentifier) => {
+    const stmt = db.prepare('SELECT carrot_count FROM player_carrots WHERE player_identifier = ?');
+    const result = stmt.get(playerIdentifier);
+    return result ? result.carrot_count : 0;
+  },
+
+  // 增加胡萝卜
+  addCarrot: (playerIdentifier, count = 1) => {
+    const stmt = db.prepare(`
+      INSERT INTO player_carrots (player_identifier, carrot_count, last_updated)
+      VALUES (?, ?, strftime('%s', 'now'))
+      ON CONFLICT(player_identifier) DO UPDATE SET
+        carrot_count = carrot_count + ?,
+        last_updated = strftime('%s', 'now')
+    `);
+    return stmt.run(playerIdentifier, count, count);
+  },
+
+  // 获取所有玩家排名
+  getLeaderboard: (limit = 10) => {
+    const stmt = db.prepare(`
+      SELECT player_identifier, carrot_count, last_updated
+      FROM player_carrots
+      ORDER BY carrot_count DESC
+      LIMIT ?
+    `);
+    return stmt.all(limit);
   },
 };
 
