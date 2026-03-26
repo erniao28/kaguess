@@ -370,12 +370,12 @@ const App: React.FC = () => {
     }
   };
 
-  // 进入房间时清空聊天消息
+  // 进入房间时清空聊天消息（仅公共房间）
   useEffect(() => {
-    if (gameState === GameState.ROOM) {
+    if (gameState === GameState.ROOM && !isPrivateRoom) {
       setChatMessages([]);
     }
-  }, [gameState]);
+  }, [gameState, isPrivateRoom]);
 
   const loser = players[0].score > players[1].score ? players[0] : players[1].score > players[0].score ? players[1] : null;
 
@@ -504,16 +504,6 @@ const App: React.FC = () => {
             <div className="lg:col-span-3 lg:sticky lg:top-8 order-3">
               <ScoreBoard player={players[1]} onUpdateScore={handleUpdateScore} />
             </div>
-          </div>
-
-          {/* 聊天框 */}
-          <div className="max-w-2xl mx-auto">
-            <ChatBox
-              messages={chatMessages}
-              onSendMessage={handleSendMessage}
-              isConnected={!!socket?.connected && !!roomId}
-              mySocketId={mySocketId}
-            />
           </div>
         </div>
       )}

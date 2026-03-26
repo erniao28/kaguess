@@ -238,7 +238,7 @@ io.on('connection', (socket) => {
   });
 
   // 私密房间事件
-  // 创建私密房间
+  // 创建私密房间（复用普通房间逻辑 + 持久化）
   socket.on('create_private_room', ({ roomId, password }) => {
     console.log(`[PRIVATE_ROOM] 尝试创建房间：${roomId}`);
 
@@ -248,6 +248,24 @@ io.on('connection', (socket) => {
       return;
     }
 
+    // 在内存中创建房间（复用普通房间逻辑）
+    if (rooms.has(roomId)) {
+      socket.emit('private_room_error', '房间已存在');
+      return;
+    }
+
+    rooms.set(roomId, {
+      players: [],
+      state: {
+        fox: null,
+        bunny: null,
+        word: null,
+        punishments: null
+      },
+      isPrivate: true
+    });
+
+    // 保存到数据库
     try {
       roomOps.create(roomId, password || '');
       socket.join(roomId);
@@ -267,12 +285,13 @@ io.on('connection', (socket) => {
     }
   });
 
-  // 加入私密房间
+  // 加入私密房间（复用普通房间逻辑 + 持久化）
   socket.on('join_private_room', ({ roomId, password }) => {
     console.log(`[PRIVATE_ROOM] 尝试加入房间：${roomId}`);
 
-    const room = roomOps.get(roomId);
-    if (!room) {
+    // 先检查数据库
+    const roomDb = roomOps.get(roomId);
+    if (!roomDb) {
       socket.emit('private_room_error', '房间不存在');
       return;
     }
@@ -288,15 +307,40 @@ io.on('connection', (socket) => {
       return;
     }
 
+    // 检查内存中是否有房间，没有则创建
+    if (!rooms.has(roomId)) {
+      rooms.set(roomId, {
+        players: [],
+        state: {
+          fox: null,
+          bunny: null,
+          word: null,
+          punishments: null
+        },
+        isPrivate: true
+      });
+    }
+
+    const room = rooms.get(roomId);
+
     socket.join(roomId);
     socket.data = { roomId, role: null, isPrivate: true };
+
+    // 同步房间状态给新玩家
+    const syncData = {
+      fox: room.state.fox ? { ...room.state.fox.player, socketId: room.state.fox.socketId } : null,
+      bunny: room.state.bunny ? { ...room.state.bunny.player, socketId: room.state.bunny.socketId } : null,
+      foxReady: room.state.fox?.isReady,
+      bunnyReady: room.state.bunny?.isReady
+    };
+    io.to(roomId).emit('sync_room', syncData);
 
     // 获取历史消息
     const history = messageOps.getHistory(roomId, 100);
 
     socket.emit('private_room_joined', {
       roomId,
-      bgImage: room.bg_image || '',
+      bgImage: roomDb.bg_image || '',
       history
     });
 
