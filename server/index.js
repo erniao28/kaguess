@@ -5,7 +5,7 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { roomOps, messageOps, backgroundOps, carrotOps } from './db.js';
+import { roomOps, messageOps, backgroundOps, carrotOps, effectOps } from './db.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -437,6 +437,52 @@ io.on('connection', (socket) => {
   socket.on('get_carrot_count', (playerIdentifier) => {
     const count = carrotOps.getCount(playerIdentifier);
     socket.emit('carrot_count', { playerIdentifier, count });
+  });
+
+  // 获取自己的胡萝卜数量（连接后主动获取）
+  socket.on('get_my_carrots', () => {
+    const count = carrotOps.getCount(socket.id);
+    socket.emit('my_carrots', count);
+  });
+
+  // 获取排行榜
+  socket.on('get_leaderboard', () => {
+    const leaderboard = carrotOps.getLeaderboard(10);
+    socket.emit('leaderboard', leaderboard);
+  });
+
+  // 获取已解锁的特效
+  socket.on('get_unlocked_effects', () => {
+    const effects = effectOps.getUnlocked(socket.id);
+    socket.emit('unlocked_effects', effects);
+  });
+
+  // 解锁特效（购买）
+  socket.on('unlock_effect', ({ effectId, cost }) => {
+    const currentCount = carrotOps.getCount(socket.id);
+    if (currentCount >= cost) {
+      // 扣除胡萝卜
+      const stmt = db.prepare(`
+        UPDATE player_carrots SET carrot_count = carrot_count - ?, last_updated = strftime('%s', 'now')
+        WHERE player_identifier = ?
+      `);
+      stmt.run(cost, socket.id);
+
+      // 解锁特效
+      effectOps.unlock(socket.id, effectId);
+
+      // 通知客户端
+      const newCount = carrotOps.getCount(socket.id);
+      socket.emit('effect_unlocked', { effectId, carrotCount: newCount });
+
+      // 重新获取排行榜
+      const leaderboard = carrotOps.getLeaderboard(10);
+      socket.emit('leaderboard', leaderboard);
+
+      console.log(`[EFFECT] 玩家 ${socket.id} 解锁特效 ${effectId}, 花费 ${cost} 胡萝卜`);
+    } else {
+      socket.emit('effect_error', '胡萝卜不足');
+    }
   });
 
   // 开始游戏（由先准备好的一方触发，服务器统一分发）

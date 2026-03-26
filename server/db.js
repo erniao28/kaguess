@@ -48,10 +48,20 @@ db.exec(`
     last_updated INTEGER DEFAULT (strftime('%s', 'now'))
   );
 
+  -- 玩家特效解锁表
+  CREATE TABLE IF NOT EXISTS player_effects (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    player_identifier TEXT NOT NULL,
+    effect_id TEXT NOT NULL,
+    unlocked_at INTEGER DEFAULT (strftime('%s', 'now')),
+    UNIQUE(player_identifier, effect_id)
+  );
+
   -- 创建索引
   CREATE INDEX IF NOT EXISTS idx_messages_room_id ON messages(room_id);
   CREATE INDEX IF NOT EXISTS idx_messages_timestamp ON messages(timestamp);
   CREATE INDEX IF NOT EXISTS idx_player_carrots_identifier ON player_carrots(player_identifier);
+  CREATE INDEX IF NOT EXISTS idx_player_effects_identifier ON player_effects(player_identifier);
 `);
 
 // 插入预设背景（如果不存在）
@@ -219,6 +229,38 @@ export const carrotOps = {
       LIMIT ?
     `);
     return stmt.all(limit);
+  },
+};
+
+// 特效操作
+export const effectOps = {
+  // 获取玩家解锁的特效
+  getUnlocked: (playerIdentifier) => {
+    const stmt = db.prepare('SELECT effect_id FROM player_effects WHERE player_identifier = ?');
+    return stmt.all(playerIdentifier).map(row => row.effect_id);
+  },
+
+  // 解锁特效
+  unlock: (playerIdentifier, effectId) => {
+    const stmt = db.prepare(`
+      INSERT INTO player_effects (player_identifier, effect_id, unlocked_at)
+      VALUES (?, ?, strftime('%s', 'now'))
+      ON CONFLICT(player_identifier, effect_id) DO NOTHING
+    `);
+    return stmt.run(playerIdentifier, effectId);
+  },
+
+  // 批量解锁特效
+  unlockMany: (playerIdentifier, effectIds) => {
+    const stmt = db.prepare(`
+      INSERT INTO player_effects (player_identifier, effect_id, unlocked_at)
+      VALUES (?, ?, strftime('%s', 'now'))
+      ON CONFLICT(player_identifier, effect_id) DO NOTHING
+    `);
+    const transaction = db.transaction((ids) => {
+      ids.forEach(id => stmt.run(playerIdentifier, id));
+    });
+    transaction(effectIds);
   },
 };
 

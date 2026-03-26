@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { io, Socket } from 'socket.io-client';
-import { GameState, Player, ForbiddenWord, SyncMessage, PunishmentBanks, ChatMessage, EMOJI_LIST, PrivateRoom, Background } from './types';
+import { GameState, Player, ForbiddenWord, SyncMessage, PunishmentBanks, ChatMessage, EMOJI_LIST, PrivateRoom, Background, Effect, LeaderboardEntry } from './types';
 import { FORBIDDEN_WORDS, TRUTH_PUNISHMENTS, DARE_PUNISHMENTS } from './constants';
 import SetupRoom from './components/SetupRoom';
 import SetupScreen from './components/SetupScreen';
@@ -12,6 +12,8 @@ import TransitionOverlay from './components/TransitionOverlay';
 import ChatBox from './components/ChatBox';
 import PrivateRoomModal from './components/PrivateRoomModal';
 import RoomSettings from './components/RoomSettings';
+import HonorHall from './components/HonorHall';
+import EffectShop from './components/EffectShop';
 
 const App: React.FC = () => {
   const [gameState, setGameState] = useState<GameState>(GameState.ROOM);
@@ -44,6 +46,13 @@ const App: React.FC = () => {
   const [myCarrotCount, setMyCarrotCount] = useState(0);
   const [showCarrotAward, setShowCarrotAward] = useState(false);
   const [carrotAwardData, setCarrotAwardData] = useState<CarrotAward | null>(null);
+
+  // 荣誉室和特效商店相关状态
+  const [showHonorHall, setShowHonorHall] = useState(false);
+  const [showEffectShop, setShowEffectShop] = useState(false);
+  const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
+  const [unlockedEffects, setUnlockedEffects] = useState<string[]>([]);
+  const [selectedEffectId, setSelectedEffectId] = useState<string | null>(null);
 
   useEffect(() => {
     playerRoleRef.current = playerRole;
@@ -263,6 +272,35 @@ const App: React.FC = () => {
       setTimeout(() => setShowCarrotAward(false), 3000);
     });
 
+    // 我的胡萝卜数量
+    newSocket.on('my_carrots', (count: number) => {
+      setMyCarrotCount(count);
+    });
+
+    // 排行榜
+    newSocket.on('leaderboard', (data: LeaderboardEntry[]) => {
+      setLeaderboard(data);
+    });
+
+    // 已解锁特效
+    newSocket.on('unlocked_effects', (effects: string[]) => {
+      setUnlockedEffects(effects);
+    });
+
+    // 特效解锁成功
+    newSocket.on('effect_unlocked', ({ effectId, carrotCount }) => {
+      console.log('[EFFECT] 特效解锁成功:', effectId);
+      setUnlockedEffects(prev => [...prev, effectId]);
+      setMyCarrotCount(carrotCount);
+      // 默认选中新解锁的特效
+      setSelectedEffectId(effectId);
+    });
+
+    // 特效错误
+    newSocket.on('effect_error', (error: string) => {
+      alert(error);
+    });
+
     return () => {
       newSocket.off('connect');
       newSocket.off('room_created');
@@ -286,6 +324,11 @@ const App: React.FC = () => {
       newSocket.off('room_password_updated');
       newSocket.off('backgrounds_list');
       newSocket.off('carrot_awarded');
+      newSocket.off('my_carrots');
+      newSocket.off('leaderboard');
+      newSocket.off('unlocked_effects');
+      newSocket.off('effect_unlocked');
+      newSocket.off('effect_error');
     };
   }, []);
 
@@ -405,6 +448,34 @@ const App: React.FC = () => {
     }
   };
 
+  // 荣誉室和特效商店处理函数
+  const handleOpenHonorHall = () => {
+    socket?.emit('get_leaderboard');
+    setShowHonorHall(true);
+  };
+
+  const handleOpenEffectShop = () => {
+    socket?.emit('get_unlocked_effects');
+    setShowEffectShop(true);
+  };
+
+  const handlePurchaseEffect = (effectId: string, cost: number) => {
+    socket?.emit('unlock_effect', { effectId, cost });
+  };
+
+  const handleSelectEffect = (effectId: string) => {
+    setSelectedEffectId(effectId);
+    // 这里可以保存选中的特效到服务器，用于游戏结算时使用
+    console.log('[EFFECT] 选中特效:', effectId);
+  };
+
+  // 进入房间时获取胡萝卜数量
+  useEffect(() => {
+    if (roomId && socket?.connected) {
+      socket.emit('get_my_carrots');
+    }
+  }, [roomId, socket]);
+
   // 进入房间时清空聊天消息（仅公共房间）
   useEffect(() => {
     if (gameState === GameState.ROOM && !isPrivateRoom) {
@@ -439,9 +510,13 @@ const App: React.FC = () => {
         </div>
       )}
 
-      {/* 个人胡萝卜数量显示 */}
-      {myCarrotCount > 0 && gameState === GameState.PLAYING && (
-        <div className="fixed top-6 right-6 z-40 animate-in fade-in slide-in-from-right-8 duration-700">
+      {/* 个人胡萝卜数量显示 - 修改为始终显示（只要有胡萝卜）且可点击 */}
+      {myCarrotCount >= 0 && (roomId || gameState !== GameState.ROOM) && (
+        <div
+          className="fixed top-6 right-6 z-40 animate-in fade-in slide-in-from-right-8 duration-700 cursor-pointer hover:scale-105 transition-transform"
+          onClick={handleOpenHonorHall}
+          title="点击查看荣誉室"
+        >
           <div className="bg-white rounded-full shadow-xl border-4 border-yellow-400 px-6 py-3 flex items-center gap-3">
             <span className="text-4xl">🥕</span>
             <div>
@@ -501,6 +576,12 @@ const App: React.FC = () => {
                 <span className="flex items-center gap-2 text-xl">⚙️ 房间设置</span>
               </button>
             )}
+            <button
+              onClick={handleOpenEffectShop}
+              className="group relative px-6 py-5 rounded-[35px] bg-white text-purple-500 font-black hover:bg-purple-500 hover:text-white transition-all shadow-[0_10px_0_0_#e9d5ff] active:shadow-none active:translate-y-[10px] border-4 border-purple-50"
+            >
+              <span className="flex items-center gap-2 text-xl">🏪 特效商店</span>
+            </button>
             <button
               onClick={handleSettle}
               className="group relative px-10 py-5 rounded-[35px] bg-white text-rose-500 font-black hover:bg-rose-500 hover:text-white transition-all shadow-[0_10px_0_0_#fda4af] active:shadow-none active:translate-y-[10px] border-4 border-rose-50"
@@ -614,6 +695,26 @@ const App: React.FC = () => {
           />
         </div>
       )}
+
+      {/* 荣誉室模态框 */}
+      <HonorHall
+        isOpen={showHonorHall}
+        onClose={() => setShowHonorHall(false)}
+        myCarrotCount={myCarrotCount}
+        mySocketId={mySocketId}
+        leaderboard={leaderboard}
+      />
+
+      {/* 特效商店模态框 */}
+      <EffectShop
+        isOpen={showEffectShop}
+        onClose={() => setShowEffectShop(false)}
+        myCarrotCount={myCarrotCount}
+        unlockedEffects={unlockedEffects}
+        onPurchase={handlePurchaseEffect}
+        onSelectEffect={handleSelectEffect}
+        selectedEffectId={selectedEffectId}
+      />
     </div>
   );
 };

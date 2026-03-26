@@ -22,7 +22,9 @@
       "Bash(grep -o \"room_created.*select_role.*FOX\" dist/assets/*.js)",
       "Bash(grep -o 'name:\"\"\"\"\"\"\"\"' dist/assets/*.js)",
       "Bash(grep -o 'name:\"\"\"\"尼克\"\"\"\"' dist/assets/*.js)",
-      "Bash(tar:*)"
+      "Bash(tar:*)",
+      "Bash(rm -f deploy.tar.gz)",
+      "Bash(gzip deploy.tar)"
     ]
   }
 }

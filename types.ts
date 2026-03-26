@@ -77,3 +77,19 @@ export interface CarrotAward {
   winnerSocketId: string;
   carrotCount: number;
 }
+
+export interface Effect {
+  id: string;
+  name: string;
+  description: string;
+  icon: string;
+  cost: number;
+  type: 'SCORE' | 'CELEBRATION' | 'PENALTY';
+  unlocked: boolean;
+}
+
+export interface LeaderboardEntry {
+  playerIdentifier: string;
+  carrotCount: number;
+  lastUpdated: number;
+}
