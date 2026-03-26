@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { io, Socket } from 'socket.io-client';
-import { GameState, Player, ForbiddenWord, SyncMessage, PunishmentBanks, ChatMessage, EMOJI_LIST } from './types';
+import { GameState, Player, ForbiddenWord, SyncMessage, PunishmentBanks, ChatMessage, EMOJI_LIST, PrivateRoom, Background } from './types';
 import { FORBIDDEN_WORDS, TRUTH_PUNISHMENTS, DARE_PUNISHMENTS } from './constants';
 import SetupRoom from './components/SetupRoom';
 import SetupScreen from './components/SetupScreen';
@@ -10,6 +10,8 @@ import ScoreBoard from './components/ScoreBoard';
 import PunishmentModal from './components/PunishmentModal';
 import TransitionOverlay from './components/TransitionOverlay';
 import ChatBox from './components/ChatBox';
+import PrivateRoomModal from './components/PrivateRoomModal';
+import RoomSettings from './components/RoomSettings';
 
 const App: React.FC = () => {
   const [gameState, setGameState] = useState<GameState>(GameState.ROOM);
@@ -31,6 +33,14 @@ const App: React.FC = () => {
   const punishmentBanksRef = useRef<PunishmentBanks>(punishmentBanks);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [mySocketId, setMySocketId] = useState<string | null>(null);
+
+  // 私密房间相关状态
+  const [isPrivateRoom, setIsPrivateRoom] = useState(false);
+  const [privateRoomPassword, setPrivateRoomPassword] = useState('');
+  const [roomBgImage, setRoomBgImage] = useState('');
+  const [showPrivateRoomModal, setShowPrivateRoomModal] = useState(false);
+  const [showRoomSettings, setShowRoomSettings] = useState(false);
+  const [backgrounds, setBackgrounds] = useState<Background[]>([]);
 
   useEffect(() => {
     playerRoleRef.current = playerRole;
@@ -195,6 +205,46 @@ const App: React.FC = () => {
       });
     });
 
+    // 私密房间事件
+    newSocket.on('private_room_created', ({ roomId, bgImage }) => {
+      console.log('[PRIVATE_ROOM] 创建成功:', roomId);
+      setRoomId(roomId);
+      setRoomBgImage(bgImage);
+      setIsPrivateRoom(true);
+      setShowPrivateRoomModal(false);
+      setGameState(GameState.SETUP);
+    });
+
+    newSocket.on('private_room_joined', ({ roomId, bgImage, history }) => {
+      console.log('[PRIVATE_ROOM] 加入成功:', roomId);
+      setRoomId(roomId);
+      setRoomBgImage(bgImage);
+      setIsPrivateRoom(true);
+      setChatMessages(history);
+      setShowPrivateRoomModal(false);
+      setGameState(GameState.SETUP);
+    });
+
+    newSocket.on('private_room_error', (error: string) => {
+      alert(error);
+    });
+
+    newSocket.on('room_bg_updated', (bgImage) => {
+      console.log('[ROOM_SETTINGS] 背景已更新');
+      setRoomBgImage(bgImage);
+    });
+
+    newSocket.on('room_password_updated', (hasPassword) => {
+      console.log('[ROOM_SETTINGS] 密码已更新');
+      if (!hasPassword) {
+        setPrivateRoomPassword('');
+      }
+    });
+
+    newSocket.on('backgrounds_list', (list: Background[]) => {
+      setBackgrounds(list);
+    });
+
     return () => {
       newSocket.off('connect');
       newSocket.off('room_created');
@@ -211,6 +261,12 @@ const App: React.FC = () => {
       newSocket.off('settle_game');
       newSocket.off('reset_game');
       newSocket.off('chat_message');
+      newSocket.off('private_room_created');
+      newSocket.off('private_room_joined');
+      newSocket.off('private_room_error');
+      newSocket.off('room_bg_updated');
+      newSocket.off('room_password_updated');
+      newSocket.off('backgrounds_list');
     };
   }, []);
 
@@ -289,6 +345,31 @@ const App: React.FC = () => {
     socket.emit('chat_message', { roomId, message });
   };
 
+  // 私密房间处理函数
+  const handleCreatePrivateRoom = (roomId: string, password: string) => {
+    socket?.emit('create_private_room', { roomId, password });
+  };
+
+  const handleJoinPrivateRoom = (roomId: string, password: string) => {
+    socket?.emit('join_private_room', { roomId, password });
+  };
+
+  const handleUpdateRoomBg = (bgUrl: string) => {
+    if (!roomId) return;
+    socket?.emit('update_room_bg', { roomId, bgImage: bgUrl });
+  };
+
+  const handleUpdateRoomPassword = (password: string) => {
+    if (!roomId) return;
+    socket?.emit('update_room_password', { roomId, password });
+  };
+
+  const handleClearChatHistory = () => {
+    if (confirm('确定要清空聊天记录吗？此操作不可恢复！')) {
+      setChatMessages([]);
+    }
+  };
+
   // 进入房间时清空聊天消息
   useEffect(() => {
     if (gameState === GameState.ROOM) {
@@ -300,6 +381,14 @@ const App: React.FC = () => {
 
   return (
     <div className="min-h-screen flex flex-col items-center p-4 md:p-8 selection:bg-indigo-100 overflow-hidden relative bg-[#f8fafc]">
+      {/* 背景图 */}
+      {roomBgImage && (
+        <div
+          className="fixed inset-0 bg-cover bg-center opacity-20 z-0"
+          style={{ backgroundImage: `url(${roomBgImage})` }}
+        />
+      )}
+
       {effects.map(effect => (
         <div
           key={effect.id}
@@ -340,16 +429,32 @@ const App: React.FC = () => {
         </div>
 
         {gameState === GameState.PLAYING && (
-          <button
-            onClick={handleSettle}
-            className="group relative px-10 py-5 rounded-[35px] bg-white text-rose-500 font-black hover:bg-rose-500 hover:text-white transition-all shadow-[0_10px_0_0_#fda4af] active:shadow-none active:translate-y-[10px] border-4 border-rose-50"
-          >
-            <span className="flex items-center gap-2 text-xl">🏁 申请结案</span>
-          </button>
+          <div className="flex items-center gap-4">
+            {isPrivateRoom && (
+              <button
+                onClick={() => setShowRoomSettings(true)}
+                className="group relative px-6 py-5 rounded-[35px] bg-white text-indigo-500 font-black hover:bg-indigo-500 hover:text-white transition-all shadow-[0_10px_0_0_#e0e7ff] active:shadow-none active:translate-y-[10px] border-4 border-indigo-50"
+              >
+                <span className="flex items-center gap-2 text-xl">⚙️ 房间设置</span>
+              </button>
+            )}
+            <button
+              onClick={handleSettle}
+              className="group relative px-10 py-5 rounded-[35px] bg-white text-rose-500 font-black hover:bg-rose-500 hover:text-white transition-all shadow-[0_10px_0_0_#fda4af] active:shadow-none active:translate-y-[10px] border-4 border-rose-50"
+            >
+              <span className="flex items-center gap-2 text-xl">🏁 申请结案</span>
+            </button>
+          </div>
         )}
       </div>
 
-      {gameState === GameState.ROOM && <SetupRoom onCreate={handleCreateRoom} onJoin={handleJoinRoom} />}
+      {gameState === GameState.ROOM && (
+        <SetupRoom
+          onCreate={handleCreateRoom}
+          onJoin={handleJoinRoom}
+          onOpenPrivateRoom={() => setShowPrivateRoomModal(true)}
+        />
+      )}
 
       {gameState === GameState.SETUP && (
         <SetupScreen
@@ -424,6 +529,37 @@ const App: React.FC = () => {
             setShowPunishment(false);
           }}
         />
+      )}
+
+      {/* 私密房间模态框 */}
+      <PrivateRoomModal
+        isOpen={showPrivateRoomModal}
+        onClose={() => setShowPrivateRoomModal(false)}
+        onCreateRoom={handleCreatePrivateRoom}
+        onJoinRoom={handleJoinPrivateRoom}
+      />
+
+      {/* 房间设置模态框 */}
+      <RoomSettings
+        isOpen={showRoomSettings}
+        onClose={() => setShowRoomSettings(false)}
+        roomId={roomId}
+        currentBg={roomBgImage}
+        onUpdateBg={handleUpdateRoomBg}
+        onUpdatePassword={handleUpdateRoomPassword}
+      />
+
+      {/* 聊天框 - 私密房间模式下显示清空按钮 */}
+      {gameState === GameState.PLAYING && (
+        <div className="max-w-2xl mx-auto z-10">
+          <ChatBox
+            messages={chatMessages}
+            onSendMessage={handleSendMessage}
+            isConnected={!!socket?.connected && !!roomId}
+            mySocketId={mySocketId}
+            onClearHistory={isPrivateRoom ? handleClearChatHistory : undefined}
+          />
+        </div>
       )}
     </div>
   );

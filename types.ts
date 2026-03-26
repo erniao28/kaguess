@@ -54,3 +54,20 @@ export const EMOJI_LIST = [
   '🦊', '🐰', '🥕', '🍗', '❤️', '💔', '⭐', '🌟',
   '🎉', '🎊', '📄', '🍡', '🚔', '💤', '😴', '🙄'
 ];
+
+export interface PrivateRoom {
+  id: string;
+  password?: string;
+  bgImage?: string;
+  createdAt?: number;
+  updatedAt?: number;
+}
+
+export interface Background {
+  id: number;
+  name: string;
+  url: string;
+  isPreset: boolean;
+}
+
+export type RoomMode = 'public' | 'private';

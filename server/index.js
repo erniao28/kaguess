@@ -5,6 +5,7 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { roomOps, messageOps, backgroundOps } from './db.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -229,8 +230,126 @@ io.on('connection', (socket) => {
       role: message.senderRole
     });
 
+    // 保存到数据库
+    messageOps.add(roomId, message);
+
     // 广播给房间内所有玩家（包括发送者）
     io.to(roomId).emit('chat_message', message);
+  });
+
+  // 私密房间事件
+  // 创建私密房间
+  socket.on('create_private_room', ({ roomId, password }) => {
+    console.log(`[PRIVATE_ROOM] 尝试创建房间：${roomId}`);
+
+    // 检查房间 ID 是否合法（字母、数字、-）
+    if (!/^[a-zA-Z0-9-]{3,32}$/.test(roomId)) {
+      socket.emit('private_room_error', '房间号格式不合法（3-32 位字母、数字、-）');
+      return;
+    }
+
+    try {
+      roomOps.create(roomId, password || '');
+      socket.join(roomId);
+      socket.data = { roomId, role: null, isPrivate: true };
+
+      // 获取房间背景
+      const room = roomOps.get(roomId);
+      socket.emit('private_room_created', {
+        roomId,
+        bgImage: room.bg_image || ''
+      });
+
+      console.log(`[PRIVATE_ROOM] 房间创建成功：${roomId}`);
+    } catch (err) {
+      console.error('[PRIVATE_ROOM] 创建失败:', err);
+      socket.emit('private_room_error', '房间创建失败（可能已存在）');
+    }
+  });
+
+  // 加入私密房间
+  socket.on('join_private_room', ({ roomId, password }) => {
+    console.log(`[PRIVATE_ROOM] 尝试加入房间：${roomId}`);
+
+    const room = roomOps.get(roomId);
+    if (!room) {
+      socket.emit('private_room_error', '房间不存在');
+      return;
+    }
+
+    // 验证密码
+    const result = roomOps.verifyPassword(roomId, password);
+    if (!result.exists) {
+      socket.emit('private_room_error', '房间不存在');
+      return;
+    }
+    if (!result.valid) {
+      socket.emit('private_room_error', '密码错误');
+      return;
+    }
+
+    socket.join(roomId);
+    socket.data = { roomId, role: null, isPrivate: true };
+
+    // 获取历史消息
+    const history = messageOps.getHistory(roomId, 100);
+
+    socket.emit('private_room_joined', {
+      roomId,
+      bgImage: room.bg_image || '',
+      history
+    });
+
+    console.log(`[PRIVATE_ROOM] 加入成功：${roomId}`);
+  });
+
+  // 获取房间信息
+  socket.on('get_room_info', (roomId) => {
+    const room = roomOps.get(roomId);
+    if (room) {
+      socket.emit('room_info', {
+        roomId: room.id,
+        bgImage: room.bg_image || '',
+        isPrivate: true
+      });
+    }
+  });
+
+  // 更新房间背景
+  socket.on('update_room_bg', ({ roomId, bgImage }) => {
+    const room = roomOps.get(roomId);
+    if (!room) {
+      socket.emit('room_settings_error', '房间不存在');
+      return;
+    }
+
+    roomOps.updateBackground(roomId, bgImage);
+    io.to(roomId).emit('room_bg_updated', bgImage);
+    console.log(`[ROOM_SETTINGS] 背景已更新：${roomId}`);
+  });
+
+  // 更新房间密码
+  socket.on('update_room_password', ({ roomId, password }) => {
+    const room = roomOps.get(roomId);
+    if (!room) {
+      socket.emit('room_settings_error', '房间不存在');
+      return;
+    }
+
+    roomOps.updatePassword(roomId, password || '');
+    socket.emit('room_password_updated', !!password);
+    console.log(`[ROOM_SETTINGS] 密码已更新：${roomId}`);
+  });
+
+  // 获取背景列表
+  socket.on('get_backgrounds', () => {
+    const backgrounds = backgroundOps.getAll();
+    socket.emit('backgrounds_list', backgrounds.map(bg => ({
+      id: bg.id,
+      name: bg.name,
+      url: bg.url,
+      isPreset: bg.is_preset === 1
+    })));
   });
 
   // 开始游戏（由先准备好的一方触发，服务器统一分发）

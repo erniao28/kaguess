@@ -6,9 +6,10 @@ interface ChatBoxProps {
   onSendMessage: (content: string, type: 'text' | 'emoji' | 'image') => void;
   isConnected: boolean;
   mySocketId?: string | null;
+  onClearHistory?: () => void;
 }
 
-const ChatBox: React.FC<ChatBoxProps> = ({ messages, onSendMessage, isConnected, mySocketId }) => {
+const ChatBox: React.FC<ChatBoxProps> = ({ messages, onSendMessage, isConnected, mySocketId, onClearHistory }) => {
   const [inputValue, setInputValue] = useState('');
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [showImagePreview, setShowImagePreview] = useState<string | null>(null);
@@ -98,6 +99,15 @@ const ChatBox: React.FC<ChatBoxProps> = ({ messages, onSendMessage, isConnected,
           {isConnected && <span className="w-2 h-2 bg-green-400 rounded-full animate-pulse" />}
         </h3>
         <div className="flex gap-2">
+          {onClearHistory && (
+            <button
+              onClick={onClearHistory}
+              className="text-white hover:bg-white/20 rounded-full p-2 transition-colors text-xs"
+              title="清空历史记录"
+            >
+              🗑️
+            </button>
+          )}
           <button
             onClick={() => setShowEmojiPicker(!showEmojiPicker)}
             className="text-white hover:bg-white/20 rounded-full p-2 transition-colors"
