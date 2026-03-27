@@ -510,22 +510,20 @@ const App: React.FC = () => {
         </div>
       )}
 
-      {/* 个人胡萝卜数量显示 - 修改为始终显示（只要有胡萝卜）且可点击 */}
-      {myCarrotCount >= 0 && (roomId || gameState !== GameState.ROOM) && (
-        <div
-          className="fixed top-6 right-6 z-40 animate-in fade-in slide-in-from-right-8 duration-700 cursor-pointer hover:scale-105 transition-transform"
-          onClick={handleOpenHonorHall}
-          title="点击查看荣誉室"
-        >
-          <div className="bg-white rounded-full shadow-xl border-4 border-yellow-400 px-6 py-3 flex items-center gap-3">
-            <span className="text-4xl">🥕</span>
-            <div>
-              <div className="text-xs font-bold text-slate-400">我的胡萝卜</div>
-              <div className="text-2xl font-black text-yellow-600 leading-none">{myCarrotCount}</div>
-            </div>
+      {/* 个人胡萝卜数量显示 - 始终显示，点击打开荣誉室 */}
+      <div
+        className="fixed top-6 right-6 z-40 animate-in fade-in slide-in-from-right-8 duration-700 cursor-pointer hover:scale-105 transition-transform"
+        onClick={handleOpenHonorHall}
+        title="点击查看荣誉室"
+      >
+        <div className="bg-white rounded-full shadow-xl border-4 border-yellow-400 px-6 py-3 flex items-center gap-3">
+          <span className="text-4xl">🥕</span>
+          <div>
+            <div className="text-xs font-bold text-slate-400">我的胡萝卜</div>
+            <div className="text-2xl font-black text-yellow-600 leading-none">{myCarrotCount}</div>
           </div>
         </div>
-      )}
+      </div>
 
       {effects.map(effect => (
         <div
