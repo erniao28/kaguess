@@ -5,7 +5,8 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { roomOps, messageOps, backgroundOps, carrotOps, effectOps } from './db.js';
+import { roomOps, messageOps, backgroundOps, carrotOps, effectOps, playerOps, gameHistoryOps, vipRoomOps } from './db.js';
+import db from './db.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -25,8 +26,12 @@ const io = new Server(httpServer, {
 // 房间存储：roomId -> { players: [], state: {} }
 const rooms = new Map();
 
+// 玩家连接时，创建或更新玩家档案
 io.on('connection', (socket) => {
   console.log(`玩家连接：${socket.id}`);
+
+  // 初始化玩家档案（如果不存在则创建）
+  playerOps.upsert(socket.id, { nickname: '玩家' });
 
   // 创建房间
   socket.on('create_room', (roomId) => {
@@ -274,6 +279,9 @@ io.on('connection', (socket) => {
     // 保存到数据库
     try {
       roomOps.create(roomId, password || '');
+      // 创建 VIP 房间记录（永久保存）
+      vipRoomOps.create(roomId, socket.id, { name: roomId, bgImage: '' });
+
       socket.join(roomId);
       socket.data = { roomId, role: null, isPrivate: true };
 
@@ -412,10 +420,13 @@ io.on('connection', (socket) => {
 
     // 根据角色获取玩家标识（使用 socketId 作为唯一标识）
     let winnerSocketId = null;
+    let loserSocketId = null;
     if (winnerRole === 'FOX' && room.state.fox) {
       winnerSocketId = room.state.fox.socketId;
+      loserSocketId = room.state.bunny?.socketId;
     } else if (winnerRole === 'BUNNY' && room.state.bunny) {
       winnerSocketId = room.state.bunny.socketId;
+      loserSocketId = room.state.fox?.socketId;
     }
 
     if (winnerSocketId) {
@@ -423,6 +434,38 @@ io.on('connection', (socket) => {
       carrotOps.addCarrot(winnerSocketId, 1);
       const count = carrotOps.getCount(winnerSocketId);
       console.log(`[CARROT] 玩家 ${winnerSocketId} 获得胡萝卜，总数：${count}`);
+
+      // 同步玩家档案中的胡萝卜数量
+      playerOps.update(winnerSocketId, { carrot_count: count });
+
+      // 记录游戏历史
+      const foxScore = room.state.fox?.player?.score || 0;
+      const bunnyScore = room.state.bunny?.player?.score || 0;
+      gameHistoryOps.add({
+        roomId,
+        foxPlayer: room.state.fox?.socketId,
+        bunnyPlayer: room.state.bunny?.socketId,
+        winner: winnerRole,
+        foxScore,
+        bunnyScore,
+        wordUsed: room.state.word?.char,
+        duration: 0 // TODO: 记录游戏时长
+      });
+
+      // 更新玩家统计（胜利者 +1 胜场，双方 +1 总场次）
+      if (winnerSocketId) {
+        const winnerProfile = playerOps.get(winnerSocketId);
+        playerOps.update(winnerSocketId, {
+          total_games: (winnerProfile?.total_games || 0) + 1,
+          win_games: (winnerProfile?.win_games || 0) + 1
+        });
+      }
+      if (loserSocketId) {
+        const loserProfile = playerOps.get(loserSocketId);
+        playerOps.update(loserSocketId, {
+          total_games: (loserProfile?.total_games || 0) + 1
+        });
+      }
 
       // 通知所有玩家
       io.to(roomId).emit('carrot_awarded', {
@@ -566,6 +609,35 @@ io.on('connection', (socket) => {
 const PORT = process.env.PORT || 3001;
 const HOST = process.env.HOST || '127.0.0.1';
 
+// 服务器启动时，从数据库恢复 VIP 房间
+function restoreVipRooms() {
+  try {
+    // 获取所有未过期的 VIP 房间
+    const stmt = db.prepare("SELECT * FROM vip_rooms WHERE expires_at IS NULL OR expires_at > strftime('%s', 'now')");
+    const activeVipRooms = stmt.all();
+
+    activeVipRooms.forEach(room => {
+      rooms.set(room.id, {
+        players: [],
+        state: {
+          fox: null,
+          bunny: null,
+          word: null,
+          punishments: null
+        },
+        isPrivate: true
+      });
+      console.log(`[RESTORE] 恢复 VIP 房间：${room.id}`);
+    });
+
+    console.log(`[RESTORE] 已恢复 ${activeVipRooms.length} 个 VIP 房间`);
+  } catch (err) {
+    console.error('[RESTORE] 恢复房间失败:', err);
+  }
+}
+
 httpServer.listen(PORT, HOST, () => {
   console.log(`服务器运行在 http://${HOST}:${PORT}`);
+  // 延迟恢复房间，确保数据库已初始化
+  setTimeout(restoreVipRooms, 1000);
 });

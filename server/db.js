@@ -57,11 +57,51 @@ db.exec(`
     UNIQUE(player_identifier, effect_id)
   );
 
+  -- 玩家档案表（永久保存玩家数据）
+  CREATE TABLE IF NOT EXISTS player_profiles (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    player_identifier TEXT UNIQUE NOT NULL,
+    nickname TEXT DEFAULT '玩家',
+    total_games INTEGER DEFAULT 0,
+    win_games INTEGER DEFAULT 0,
+    carrot_count INTEGER DEFAULT 0,
+    vip_level INTEGER DEFAULT 0,
+    created_at INTEGER DEFAULT (strftime('%s', 'now')),
+    last_login INTEGER DEFAULT (strftime('%s', 'now'))
+  );
+
+  -- 游戏历史记录表
+  CREATE TABLE IF NOT EXISTS game_history (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    room_id TEXT NOT NULL,
+    fox_player TEXT,
+    bunny_player TEXT,
+    winner TEXT,
+    fox_score INTEGER DEFAULT 0,
+    bunny_score INTEGER DEFAULT 0,
+    word_used TEXT,
+    duration INTEGER DEFAULT 0,
+    created_at INTEGER DEFAULT (strftime('%s', 'now'))
+  );
+
+  -- VIP 房间扩展表（保存房间详细配置）
+  CREATE TABLE IF NOT EXISTS vip_rooms (
+    id TEXT PRIMARY KEY,
+    owner_identifier TEXT NOT NULL,
+    room_name TEXT DEFAULT 'VIP 房间',
+    is_vip INTEGER DEFAULT 1,
+    max_players INTEGER DEFAULT 2,
+    bg_image TEXT DEFAULT '',
+    created_at INTEGER DEFAULT (strftime('%s', 'now')),
+    expires_at INTEGER,
+    FOREIGN KEY (id) REFERENCES rooms(id) ON DELETE CASCADE
+  );
+
   -- 创建索引
-  CREATE INDEX IF NOT EXISTS idx_messages_room_id ON messages(room_id);
-  CREATE INDEX IF NOT EXISTS idx_messages_timestamp ON messages(timestamp);
-  CREATE INDEX IF NOT EXISTS idx_player_carrots_identifier ON player_carrots(player_identifier);
-  CREATE INDEX IF NOT EXISTS idx_player_effects_identifier ON player_effects(player_identifier);
+  CREATE INDEX IF NOT EXISTS idx_player_profiles_identifier ON player_profiles(player_identifier);
+  CREATE INDEX IF NOT EXISTS idx_game_history_room_id ON game_history(room_id);
+  CREATE INDEX IF NOT EXISTS idx_game_history_created_at ON game_history(created_at);
+  CREATE INDEX IF NOT EXISTS idx_vip_rooms_owner ON vip_rooms(owner_identifier);
 `);
 
 // 插入预设背景（如果不存在）
@@ -261,6 +301,141 @@ export const effectOps = {
       ids.forEach(id => stmt.run(playerIdentifier, id));
     });
     transaction(effectIds);
+  },
+};
+
+// 玩家档案操作
+export const playerOps = {
+  // 创建或更新玩家档案
+  upsert: (playerIdentifier, data = {}) => {
+    const stmt = db.prepare(`
+      INSERT INTO player_profiles (player_identifier, nickname, carrot_count, last_login)
+      VALUES (?, ?, ?, strftime('%s', 'now'))
+      ON CONFLICT(player_identifier) DO UPDATE SET
+        nickname = excluded.nickname,
+        carrot_count = excluded.carrot_count,
+        last_login = strftime('%s', 'now')
+    `);
+    return stmt.run(playerIdentifier, data.nickname || '玩家', data.carrot_count || 0);
+  },
+
+  // 获取玩家档案
+  get: (playerIdentifier) => {
+    const stmt = db.prepare('SELECT * FROM player_profiles WHERE player_identifier = ?');
+    return stmt.get(playerIdentifier);
+  },
+
+  // 更新玩家数据
+  update: (playerIdentifier, updates) => {
+    const allowed = ['nickname', 'total_games', 'win_games', 'carrot_count', 'vip_level'];
+    const fields = [];
+    const values = [];
+    Object.entries(updates).forEach(([key, value]) => {
+      if (allowed.includes(key)) {
+        fields.push(`${key} = ?`);
+        values.push(value);
+      }
+    });
+    if (fields.length === 0) return;
+    fields.push("last_updated = strftime('%s', 'now')");
+    const stmt = db.prepare(`UPDATE player_profiles SET ${fields.join(', ')} WHERE player_identifier = ?`);
+    values.push(playerIdentifier);
+    return stmt.run(...values);
+  },
+
+  // 获取玩家排名
+  getLeaderboard: (limit = 10, orderBy = 'carrot_count') => {
+    const validOrders = ['carrot_count', 'win_games', 'total_games', 'vip_level'];
+    const order = validOrders.includes(orderBy) ? orderBy : 'carrot_count';
+    const stmt = db.prepare(`SELECT * FROM player_profiles ORDER BY ${order} DESC LIMIT ?`);
+    return stmt.all(limit);
+  },
+};
+
+// 游戏历史操作
+export const gameHistoryOps = {
+  // 记录游戏
+  add: (gameData) => {
+    const stmt = db.prepare(`
+      INSERT INTO game_history (room_id, fox_player, bunny_player, winner, fox_score, bunny_score, word_used, duration)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+    return stmt.run(
+      gameData.roomId,
+      gameData.foxPlayer,
+      gameData.bunnyPlayer,
+      gameData.winner,
+      gameData.foxScore,
+      gameData.bunnyScore,
+      gameData.wordUsed,
+      gameData.duration
+    );
+  },
+
+  // 获取玩家历史
+  getPlayerHistory: (playerIdentifier, limit = 20) => {
+    const stmt = db.prepare(`
+      SELECT * FROM game_history
+      WHERE fox_player = ? OR bunny_player = ?
+      ORDER BY created_at DESC LIMIT ?
+    `);
+    return stmt.all(playerIdentifier, playerIdentifier, limit);
+  },
+
+  // 获取房间历史
+  getRoomHistory: (roomId, limit = 10) => {
+    const stmt = db.prepare(`
+      SELECT * FROM game_history WHERE room_id = ? ORDER BY created_at DESC LIMIT ?
+    `);
+    return stmt.all(roomId, limit);
+  },
+};
+
+// VIP 房间操作
+export const vipRoomOps = {
+  // 创建 VIP 房间
+  create: (roomId, ownerIdentifier, options = {}) => {
+    const stmt = db.prepare(`
+      INSERT INTO vip_rooms (id, owner_identifier, room_name, is_vip, bg_image, expires_at)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `);
+    const expiresAt = options.expiresAt || null;
+    return stmt.run(roomId, ownerIdentifier, options.name || 'VIP 房间', 1, options.bgImage || '', expiresAt);
+  },
+
+  // 获取 VIP 房间
+  get: (roomId) => {
+    const stmt = db.prepare('SELECT * FROM vip_rooms WHERE id = ?');
+    return stmt.get(roomId);
+  },
+
+  // 获取玩家的所有 VIP 房间
+  getPlayerRooms: (playerIdentifier) => {
+    const stmt = db.prepare('SELECT * FROM vip_rooms WHERE owner_identifier = ? ORDER BY created_at DESC');
+    return stmt.all(playerIdentifier);
+  },
+
+  // 更新 VIP 房间
+  update: (roomId, updates) => {
+    const allowed = ['room_name', 'is_vip', 'bg_image', 'expires_at'];
+    const fields = [];
+    const values = [];
+    Object.entries(updates).forEach(([key, value]) => {
+      if (allowed.includes(key)) {
+        fields.push(`${key} = ?`);
+        values.push(value);
+      }
+    });
+    if (fields.length === 0) return;
+    const stmt = db.prepare(`UPDATE vip_rooms SET ${fields.join(', ')} WHERE id = ?`);
+    values.push(roomId);
+    return stmt.run(...values);
+  },
+
+  // 删除 VIP 房间
+  delete: (roomId) => {
+    const stmt = db.prepare('DELETE FROM vip_rooms WHERE id = ?');
+    return stmt.run(roomId);
   },
 };
 

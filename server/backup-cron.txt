@@ -1,0 +1,5 @@
+# 数据库自动备份 crontab 配置
+# 每天凌晨 3 点自动备份数据库
+# 使用方法：crontab -e 然后将以下内容粘贴进去
+
+0 3 * * * /root/kaguess/server/backup-db.sh /root/kaguess/backups >> /root/kaguess/logs/backup.log 2>&1
