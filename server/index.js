@@ -26,12 +26,11 @@ const io = new Server(httpServer, {
 // 房间存储：roomId -> { players: [], state: {} }
 const rooms = new Map();
 
-// 玩家连接时，创建或更新玩家档案
+// 玩家连接时，不立即创建档案，等选择角色时再创建
 io.on('connection', (socket) => {
   console.log(`玩家连接：${socket.id}`);
 
-  // 初始化玩家档案（如果不存在则创建）
-  playerOps.upsert(socket.id, { nickname: '玩家' });
+  // 不再为 socket.id 创建档案，等 select_role 时使用 player.name 创建持久化档案
 
   // 创建房间
   socket.on('create_room', (roomId) => {
