@@ -149,6 +149,8 @@ io.on('connection', (socket) => {
     // 测试房间 000，朱迪选择时触发欢迎
     if (roomId === '000' && role === 'bunny') {
       console.log('[BIRTHDAY] 朱迪选择了兔子角色，准备发送生日欢迎！');
+      // 发送生日特效给客户端
+      io.to(roomId).emit('birthday_effect', { type: 'birthday', message: '生日快乐！' });
     }
 
     // 同步房间状态给所有玩家（包括发送者）

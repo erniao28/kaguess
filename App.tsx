@@ -330,6 +330,12 @@ const App: React.FC = () => {
       }, 2000);
     });
 
+    // 生日特效 - 测试房间 000 专用
+    newSocket.on('birthday_effect', (data) => {
+      console.log('[BIRTHDAY] 收到生日特效:', data);
+      setShowBirthdayEffect(true);
+    });
+
     return () => {
       newSocket.off('connect');
       newSocket.off('room_created');
@@ -359,6 +365,7 @@ const App: React.FC = () => {
       newSocket.off('effect_unlocked');
       newSocket.off('effect_error');
       newSocket.off('timed_animation');
+      newSocket.off('birthday_effect');
     };
   }, []);
 
