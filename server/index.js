@@ -122,6 +122,28 @@ io.on('connection', (socket) => {
     socket.data.role = role;
     socket.data.player = player;
 
+    // 重要：使用玩家名字更新档案标识符（从 socket.id 切换到 player.name）
+    if (player.name) {
+      // 将旧 socket.id 的胡萝卜数量转移到玩家名字
+      const oldCarrotCount = carrotOps.getCount(socket.id);
+      if (oldCarrotCount > 0) {
+        // 转移胡萝卜
+        const stmt = db.prepare(`
+          INSERT INTO player_carrots (player_identifier, carrot_count, last_updated)
+          VALUES (?, ?, strftime('%s', 'now'))
+          ON CONFLICT(player_identifier) DO UPDATE SET
+            carrot_count = player_carrots.carrot_count + excluded.carrot_count,
+            last_updated = strftime('%s', 'now')
+        `);
+        stmt.run(player.name, oldCarrotCount);
+        // 清除旧标识的胡萝卜（避免重复）
+        db.prepare(`DELETE FROM player_carrots WHERE player_identifier = ?`).run(socket.id);
+      }
+      // 更新玩家档案
+      playerOps.upsert(player.name, { nickname: player.name });
+      console.log(`[SELECT_ROLE] 玩家档案已更新为：${player.name}`);
+    }
+
     console.log(`[SELECT_ROLE] 玩家 ${socket.id} 成功选择角色：${role}, 玩家名字：${player.name}, isReady: ${player.isReady}`);
 
     // 测试房间 000，朱迪选择时触发欢迎
@@ -423,33 +445,33 @@ io.on('connection', (socket) => {
 
     console.log(`[CARROT] 结算游戏，胜利者：${winnerRole}`);
 
-    // 根据角色获取玩家标识（使用 socketId 作为唯一标识）
-    let winnerSocketId = null;
-    let loserSocketId = null;
+    // 根据角色获取玩家标识（使用玩家名字作为持久化标识）
+    let winnerPlayerName = null;
+    let loserPlayerName = null;
     if (winnerRole === 'FOX' && room.state.fox) {
-      winnerSocketId = room.state.fox.socketId;
-      loserSocketId = room.state.bunny?.socketId;
+      winnerPlayerName = room.state.fox.player?.name || room.state.fox.socketId;
+      loserPlayerName = room.state.bunny?.player?.name || room.state.bunny?.socketId;
     } else if (winnerRole === 'BUNNY' && room.state.bunny) {
-      winnerSocketId = room.state.bunny.socketId;
-      loserSocketId = room.state.fox?.socketId;
+      winnerPlayerName = room.state.bunny.player?.name || room.state.bunny.socketId;
+      loserPlayerName = room.state.fox?.player?.name || room.state.fox?.socketId;
     }
 
-    if (winnerSocketId) {
+    if (winnerPlayerName) {
       // 给胜利者加胡萝卜
-      carrotOps.addCarrot(winnerSocketId, 1);
-      const count = carrotOps.getCount(winnerSocketId);
-      console.log(`[CARROT] 玩家 ${winnerSocketId} 获得胡萝卜，总数：${count}`);
+      carrotOps.addCarrot(winnerPlayerName, 1);
+      const count = carrotOps.getCount(winnerPlayerName);
+      console.log(`[CARROT] 玩家 ${winnerPlayerName} 获得胡萝卜，总数：${count}`);
 
       // 同步玩家档案中的胡萝卜数量
-      playerOps.update(winnerSocketId, { carrot_count: count });
+      playerOps.update(winnerPlayerName, { carrot_count: count });
 
       // 记录游戏历史
       const foxScore = room.state.fox?.player?.score || 0;
       const bunnyScore = room.state.bunny?.player?.score || 0;
       gameHistoryOps.add({
         roomId,
-        foxPlayer: room.state.fox?.socketId,
-        bunnyPlayer: room.state.bunny?.socketId,
+        foxPlayer: room.state.fox?.player?.name || room.state.fox?.socketId,
+        bunnyPlayer: room.state.bunny?.player?.name || room.state.bunny?.socketId,
         winner: winnerRole,
         foxScore,
         bunnyScore,
@@ -458,16 +480,16 @@ io.on('connection', (socket) => {
       });
 
       // 更新玩家统计（胜利者 +1 胜场，双方 +1 总场次）
-      if (winnerSocketId) {
-        const winnerProfile = playerOps.get(winnerSocketId);
-        playerOps.update(winnerSocketId, {
+      if (winnerPlayerName) {
+        const winnerProfile = playerOps.get(winnerPlayerName);
+        playerOps.update(winnerPlayerName, {
           total_games: (winnerProfile?.total_games || 0) + 1,
           win_games: (winnerProfile?.win_games || 0) + 1
         });
       }
-      if (loserSocketId) {
-        const loserProfile = playerOps.get(loserSocketId);
-        playerOps.update(loserSocketId, {
+      if (loserPlayerName) {
+        const loserProfile = playerOps.get(loserPlayerName);
+        playerOps.update(loserPlayerName, {
           total_games: (loserProfile?.total_games || 0) + 1
         });
       }
@@ -475,7 +497,7 @@ io.on('connection', (socket) => {
       // 通知所有玩家
       io.to(roomId).emit('carrot_awarded', {
         winnerRole,
-        winnerSocketId,
+        winnerPlayerName,
         carrotCount: count
       });
     }
@@ -487,16 +509,28 @@ io.on('connection', (socket) => {
     socket.emit('carrot_count', { playerIdentifier, count });
   });
 
-  // 获取自己的胡萝卜数量（连接后主动获取）
+  // 获取自己的胡萝卜数量（连接后主动获取，使用玩家名字）
   socket.on('get_my_carrots', () => {
-    const count = carrotOps.getCount(socket.id);
-    socket.emit('my_carrots', count);
+    // 优先使用玩家名字，如果没有则回退到 socket.id
+    const playerIdentifier = socket.data.player?.name || socket.id;
+    const count = carrotOps.getCount(playerIdentifier);
+    socket.emit('my_carrots', { playerIdentifier, count });
   });
 
-  // 获取排行榜
+  // 获取排行榜（包含战绩统计）
   socket.on('get_leaderboard', () => {
-    const leaderboard = carrotOps.getLeaderboard(10);
-    socket.emit('leaderboard', leaderboard);
+    // 从 player_profiles 获取完整的战绩数据
+    const leaderboard = playerOps.getLeaderboard(10, 'carrot_count');
+    socket.emit('leaderboard', leaderboard.map(profile => ({
+      playerIdentifier: profile.player_identifier,
+      nickname: profile.nickname,
+      carrotCount: profile.carrot_count,
+      totalGames: profile.total_games,
+      winGames: profile.win_games,
+      winRate: profile.total_games > 0 ? ((profile.win_games / profile.total_games) * 100).toFixed(1) : 0,
+      vipLevel: profile.vip_level,
+      lastLogin: profile.last_login
+    })));
   });
 
   // 获取已解锁的特效
@@ -507,27 +541,29 @@ io.on('connection', (socket) => {
 
   // 解锁特效（购买）
   socket.on('unlock_effect', ({ effectId, cost }) => {
-    const currentCount = carrotOps.getCount(socket.id);
+    // 使用玩家名字作为持久化标识
+    const playerIdentifier = socket.data.player?.name || socket.id;
+    const currentCount = carrotOps.getCount(playerIdentifier);
     if (currentCount >= cost) {
       // 扣除胡萝卜
       const stmt = db.prepare(`
         UPDATE player_carrots SET carrot_count = carrot_count - ?, last_updated = strftime('%s', 'now')
         WHERE player_identifier = ?
       `);
-      stmt.run(cost, socket.id);
+      stmt.run(cost, playerIdentifier);
 
       // 解锁特效
-      effectOps.unlock(socket.id, effectId);
+      effectOps.unlock(playerIdentifier, effectId);
 
       // 通知客户端
-      const newCount = carrotOps.getCount(socket.id);
+      const newCount = carrotOps.getCount(playerIdentifier);
       socket.emit('effect_unlocked', { effectId, carrotCount: newCount });
 
       // 重新获取排行榜
       const leaderboard = carrotOps.getLeaderboard(10);
       socket.emit('leaderboard', leaderboard);
 
-      console.log(`[EFFECT] 玩家 ${socket.id} 解锁特效 ${effectId}, 花费 ${cost} 胡萝卜`);
+      console.log(`[EFFECT] 玩家 ${playerIdentifier} 解锁特效 ${effectId}, 花费 ${cost} 胡萝卜`);
     } else {
       socket.emit('effect_error', '胡萝卜不足');
     }

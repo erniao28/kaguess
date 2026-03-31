@@ -1,5 +1,15 @@
 import React from 'react';
-import { LeaderboardEntry } from '../types';
+
+interface LeaderboardEntry {
+  playerIdentifier: string;
+  nickname: string;
+  carrotCount: number;
+  totalGames: number;
+  winGames: number;
+  winRate: string;
+  vipLevel: number;
+  lastLogin: number;
+}
 
 interface HonorHallProps {
   isOpen: boolean;
@@ -85,10 +95,12 @@ const HonorHall: React.FC<HonorHallProps> = ({
                         </div>
                         <div>
                           <div className={`font-bold ${isMe ? 'text-yellow-700' : 'text-slate-700'}`}>
-                            {isMe ? '我' : `玩家 ${entry.playerIdentifier.slice(-4)}`}
+                            {isMe ? '我' : (entry.nickname || `玩家 ${entry.playerIdentifier.slice(-4)}`)}
                           </div>
-                          <div className="text-xs text-slate-400">
-                            {new Date(entry.lastUpdated * 1000).toLocaleDateString('zh-CN')}
+                          <div className="text-xs text-slate-400 flex items-center gap-2">
+                            <span>🎮 {entry.totalGames}场</span>
+                            <span>🏆 {entry.winGames}胜</span>
+                            <span>📈 {entry.winRate}%</span>
                           </div>
                         </div>
                       </div>

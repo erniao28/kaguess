@@ -290,8 +290,9 @@ const App: React.FC = () => {
     });
 
     // 我的胡萝卜数量
-    newSocket.on('my_carrots', (count: number) => {
-      setMyCarrotCount(count);
+    newSocket.on('my_carrots', (data: { playerIdentifier: string; count: number }) => {
+      console.log('[CARROT] 我的胡萝卜:', data);
+      setMyCarrotCount(data.count);
     });
 
     // 排行榜
