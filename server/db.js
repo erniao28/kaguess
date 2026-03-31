@@ -327,7 +327,7 @@ export const playerOps = {
 
   // 更新玩家数据
   update: (playerIdentifier, updates) => {
-    const allowed = ['nickname', 'total_games', 'win_games', 'carrot_count', 'vip_level'];
+    const allowed = ['nickname', 'total_games', 'win_games', 'carrot_count', 'vip_level', 'last_login'];
     const fields = [];
     const values = [];
     Object.entries(updates).forEach(([key, value]) => {
@@ -337,7 +337,6 @@ export const playerOps = {
       }
     });
     if (fields.length === 0) return;
-    fields.push("last_updated = strftime('%s', 'now')");
     const stmt = db.prepare(`UPDATE player_profiles SET ${fields.join(', ')} WHERE player_identifier = ?`);
     values.push(playerIdentifier);
     return stmt.run(...values);
