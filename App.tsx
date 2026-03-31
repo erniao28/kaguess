@@ -54,6 +54,14 @@ const App: React.FC = () => {
   const [unlockedEffects, setUnlockedEffects] = useState<string[]>([]);
   const [selectedEffectId, setSelectedEffectId] = useState<string | null>(null);
 
+  // 测试房间定时动画状态
+  const [timedEffects, setTimedEffects] = useState<{id: number, type: string, emoji: string}[]>([]);
+
+  // 生日动画状态
+  const [showBirthdayEffect, setShowBirthdayEffect] = useState(false);
+  const [birthdayAnimationStarted, setBirthdayAnimationStarted] = useState(false);
+  const [showBackgroundElements, setShowBackgroundElements] = useState(false);
+
   useEffect(() => {
     playerRoleRef.current = playerRole;
   }, [playerRole]);
@@ -108,8 +116,17 @@ const App: React.FC = () => {
         setPlayerRole('FOX');
       } else if (isBunny && playerRoleRef.current !== 'BUNNY') {
         setPlayerRole('BUNNY');
+        // 测试房间 000，朱迪进入时显示生日祝福
+        if (roomId === '000') {
+          console.log('[BIRTHDAY] 朱迪进入测试房间，触发欢迎！');
+          setShowBirthdayEffect(true);
+        }
       } else if (fox && !bunny && fox.socketId !== currentSocketId) {
         setPlayerRole('BUNNY'); // 狐狸被占了，我只能是兔子
+        if (roomId === '000') {
+          console.log('[BIRTHDAY] 朱迪进入测试房间，触发欢迎！');
+          setShowBirthdayEffect(true);
+        }
       } else if (bunny && !fox && bunny.socketId !== currentSocketId) {
         setPlayerRole('FOX'); // 兔子被占了，我只能是狐狸
       } else if (!fox && !bunny && playerRoleRef.current === null) {
@@ -301,6 +318,17 @@ const App: React.FC = () => {
       alert(error);
     });
 
+    // 测试房间定时动画
+    newSocket.on('timed_animation', ({ type, emoji, message }) => {
+      console.log('[TIMED_ANIMATION] 收到动画:', { type, emoji, message });
+      const newEffect = { id: Date.now(), type, emoji };
+      setTimedEffects(prev => [...prev, newEffect]);
+      // 2 秒后移除
+      setTimeout(() => {
+        setTimedEffects(prev => prev.filter(e => e.id !== newEffect.id));
+      }, 2000);
+    });
+
     return () => {
       newSocket.off('connect');
       newSocket.off('room_created');
@@ -329,6 +357,7 @@ const App: React.FC = () => {
       newSocket.off('unlocked_effects');
       newSocket.off('effect_unlocked');
       newSocket.off('effect_error');
+      newSocket.off('timed_animation');
     };
   }, []);
 
@@ -469,6 +498,25 @@ const App: React.FC = () => {
     console.log('[EFFECT] 选中特效:', effectId);
   };
 
+  // 生日动画处理
+  const handleStartBirthdayAnimation = () => {
+    if (birthdayAnimationStarted) return;
+    setBirthdayAnimationStarted(true);
+    console.log('[BIRTHDAY] 开始生日动画！');
+
+    // 3 秒后显示背景元素
+    setTimeout(() => {
+      setShowBackgroundElements(true);
+      console.log('[BIRTHDAY] 显示背景装饰！');
+    }, 3000);
+
+    // 5 秒后关闭弹窗，进入正式游戏
+    setTimeout(() => {
+      setShowBirthdayEffect(false);
+      console.log('[BIRTHDAY] 动画结束，进入正式游戏！');
+    }, 5000);
+  };
+
   // 进入房间时获取胡萝卜数量
   useEffect(() => {
     if (roomId && socket?.connected) {
@@ -534,6 +582,95 @@ const App: React.FC = () => {
           {effect.type === 'TICKET' ? '📄' : '🍡'}
         </div>
       ))}
+
+      {/* 测试房间定时动画效果 */}
+      {timedEffects.map(effect => (
+        <div
+          key={effect.id}
+          className="fixed inset-0 flex items-center justify-center pointer-events-none z-[200]"
+        >
+          <div className="text-center animate-in zoom-in-95 fade-in duration-500">
+            <div className="text-9xl mb-4 drop-shadow-2xl">{effect.emoji}</div>
+            {effect.type === 'celebration' && (
+              <div className="text-4xl font-black text-yellow-500 drop-shadow-lg">测试房间特效！</div>
+            )}
+          </div>
+        </div>
+      ))}
+
+      {/* 生日祝福弹窗 */}
+      {showBirthdayEffect && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-[300] flex items-center justify-center p-4" onClick={() => !birthdayAnimationStarted && handleStartBirthdayAnimation()}>
+          <div
+            className="bg-gradient-to-br from-pink-400 to-purple-500 rounded-[40px] shadow-2xl max-w-lg w-full p-8 text-center cursor-pointer transform hover:scale-105 transition-all"
+            onClick={() => handleStartBirthdayAnimation()}
+          >
+            <div className="text-8xl mb-4 animate-bounce">🎂</div>
+            <h2 className="text-4xl font-black text-white mb-2">生日快乐！</h2>
+            <p className="text-pink-100 text-xl mb-6">🍾 点击开始庆祝！</p>
+            <div className="flex justify-center gap-4 text-4xl">
+              <span className="animate-pulse">🎉</span>
+              <span className="animate-pulse delay-100">🎊</span>
+              <span className="animate-pulse delay-200">✨</span>
+              <span className="animate-pulse delay-300">🎁</span>
+              <span className="animate-pulse delay-400">🦄</span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 生日动画效果 */}
+      {birthdayAnimationStarted && (
+        <>
+          <div className="fixed inset-0 pointer-events-none z-[299]">
+            {[...Array(20)].map((_, i) => (
+              <div
+                key={i}
+                className="absolute text-5xl animate-in fade-in zoom-in duration-700"
+                style={{
+                  left: `${Math.random() * 100}%`,
+                  top: `${Math.random() * 100}%`,
+                  animationDelay: `${i * 0.1}s`,
+                  animation: `float-up 3s ease-out ${i * 0.2}s infinite`
+                }}
+              >
+                {['🎉', '🎊', '✨', '🎈', '🎁', '🦄', '🌟', '💝'][i % 8]}
+              </div>
+            ))}
+          </div>
+          <style>{`
+            @keyframes float-up {
+              0% { transform: translateY(0) rotate(0deg); opacity: 1; }
+              100% { transform: translateY(-100vh) rotate(720deg); opacity: 0; }
+            }
+          `}</style>
+        </>
+      )}
+
+      {/* 背景装饰元素 - 测试房间限定 */}
+      {showBackgroundElements && roomId === '000' && (
+        <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden">
+          {/* 玉桂狗 */}
+          <div className="absolute top-10 left-10 text-6xl animate-pulse">🐶</div>
+          {/* 可爱的羊 */}
+          <div className="absolute top-10 right-10 text-6xl animate-pulse delay-100">🐑</div>
+          {/* 米妮 */}
+          <div className="absolute bottom-10 left-10 text-6xl animate-pulse delay-200">🎀</div>
+          {/* 可爱的猪 */}
+          <div className="absolute bottom-10 right-10 text-6xl animate-pulse delay-300">🐷</div>
+          {/* 田园猫呱呱 */}
+          <div className="absolute top-1/2 left-4 text-5xl animate-bounce">🐱</div>
+          {/* 马尔济斯狗 Poke */}
+          <div className="absolute top-1/2 right-4 text-5xl animate-bounce delay-100">🐩</div>
+          {/* xx 基地小屋 */}
+          <div className="absolute bottom-0 left-1/2 transform -translate-x-1/2 text-8xl">🏠</div>
+          {/* 七里岗海 */}
+          <div className="absolute bottom-0 left-0 right-0 h-20 bg-gradient-to-t from-blue-400/30 to-transparent" />
+          <div className="absolute bottom-0 left-1/4 text-4xl animate-pulse">🌊</div>
+          <div className="absolute bottom-0 right-1/4 text-4xl animate-pulse delay-100">🌊</div>
+          <div className="absolute bottom-0 left-1/2 text-3xl font-black text-blue-600/50">七里岗</div>
+        </div>
+      )}
 
       <style>{`
         @keyframes fly-right {

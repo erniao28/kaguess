@@ -124,6 +124,11 @@ io.on('connection', (socket) => {
 
     console.log(`[SELECT_ROLE] 玩家 ${socket.id} 成功选择角色：${role}, 玩家名字：${player.name}, isReady: ${player.isReady}`);
 
+    // 测试房间 000，朱迪选择时触发欢迎
+    if (roomId === '000' && role === 'bunny') {
+      console.log('[BIRTHDAY] 朱迪选择了兔子角色，准备发送生日欢迎！');
+    }
+
     // 同步房间状态给所有玩家（包括发送者）
     const syncData = {
       fox: room.state.fox ? { ...room.state.fox.player, socketId: room.state.fox.socketId } : null,
@@ -640,4 +645,45 @@ httpServer.listen(PORT, HOST, () => {
   console.log(`服务器运行在 http://${HOST}:${PORT}`);
   // 延迟恢复房间，确保数据库已初始化
   setTimeout(restoreVipRooms, 1000);
+
+  // 启动测试房间定时动画（房间号 000）
+  startTestRoomAnimations();
 });
+
+// 测试房间定时动画配置
+const TEST_ROOM_ID = '000';
+
+// 动画效果列表 - 可以在这里自定义
+const TEST_ANIMATIONS = [
+  { type: 'celebration', emoji: '🎉', message: '庆祝！' },
+  { type: 'celebration', emoji: '🌟', message: '明星！' },
+];
+
+// 定时任务配置 - 可以在这里自定义时间
+const ANIMATION_SCHEDULE = [
+  // { hour: 12, minute: 0, animationIndex: 0 }, // 每天 12:00 播放第 0 个动画
+  // { hour: 20, minute: 0, animationIndex: 1 }, // 每天 20:00 播放第 1 个动画
+];
+
+function startTestRoomAnimations() {
+  console.log('[TEST_ANIMATION] 测试房间定时动画已启动，房间号：000');
+  console.log('[TEST_ANIMATION] 当前配置:', JSON.stringify(TEST_ANIMATIONS));
+
+  // 每分钟检查一次是否需要播放动画
+  setInterval(() => {
+    const now = new Date();
+    const currentHour = now.getHours();
+    const currentMinute = now.getMinutes();
+
+    ANIMATION_SCHEDULE.forEach(schedule => {
+      if (schedule.hour === currentHour && schedule.minute === currentMinute) {
+        const room = rooms.get(TEST_ROOM_ID);
+        if (room) {
+          const anim = TEST_ANIMATIONS[schedule.animationIndex] || TEST_ANIMATIONS[0];
+          console.log(`[TEST_ANIMATION] 定时触发：${schedule.hour}:${schedule.minute.toString().padStart(2, '0')} 播放 ${anim.emoji}`);
+          io.to(TEST_ROOM_ID).emit('timed_animation', anim);
+        }
+      }
+    });
+  }, 60000); // 每分钟检查
+}
