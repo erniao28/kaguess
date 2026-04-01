@@ -5,12 +5,24 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { roomOps, messageOps, backgroundOps, carrotOps, effectOps, playerOps, gameHistoryOps, vipRoomOps } from './db.js';
-import db from './db.js';
+import { roomOps, messageOps, backgroundOps, carrotOps, effectOps, playerOps, gameHistoryOps, vipRoomOps, inventoryOps, waitForDb, getDb, leaderboardOps } from './db.js';
+import { createHash } from 'crypto';
+
+// 初始化数据库
+waitForDb().then(() => {
+  console.log('[Server] 数据库已就绪');
+}).catch(err => {
+  console.error('[Server] 数据库初始化失败:', err);
+});
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 dotenv.config({ path: path.resolve(__dirname, '.env') });
+
+// 密码哈希辅助函数（简单 SHA256，生产环境建议用 bcrypt）
+const hashPassword = (password) => {
+  return createHash('sha256').update(password).digest('hex');
+};
 
 const app = express();
 app.use(cors());
@@ -616,6 +628,193 @@ io.on('connection', (socket) => {
     io.to(roomId).emit('reset_game');
   });
 
+  // ========== 玩家档案系统（档案码 + 密码）==========
+
+  // 检查档案码是否可用
+  socket.on('check_player_code', (playerCode) => {
+    // 验证格式：6-8 位字母或数字
+    if (!/^[a-zA-Z0-9]{6,8}$/.test(playerCode)) {
+      socket.emit('check_player_code_result', {
+        available: false,
+        error: '档案码格式不正确（6-8 位字母或数字）'
+      });
+      return;
+    }
+
+    const available = playerOps.isCodeAvailable(playerCode);
+    socket.emit('check_player_code_result', {
+      available,
+      error: available ? null : '该档案码已被占用'
+    });
+  });
+
+  // 创建玩家档案
+  socket.on('create_player_profile', ({ playerCode, password, nickname }) => {
+    // 验证格式
+    if (!/^[a-zA-Z0-9]{6,8}$/.test(playerCode)) {
+      socket.emit('player_profile_result', {
+        success: false,
+        error: '档案码格式不正确（6-8 位字母或数字）'
+      });
+      return;
+    }
+
+    if (password.length < 4) {
+      socket.emit('player_profile_result', {
+        success: false,
+        error: '密码长度至少 4 位'
+      });
+      return;
+    }
+
+    // 检查是否已被占用
+    if (!playerOps.isCodeAvailable(playerCode)) {
+      socket.emit('player_profile_result', {
+        success: false,
+        error: '该档案码已被占用'
+      });
+      return;
+    }
+
+    // 创建档案
+    try {
+      const passwordHash = hashPassword(password);
+      playerOps.create(playerCode, passwordHash, nickname || '玩家');
+
+      // 给新玩家赠送一些初始物品（测试用）
+      inventoryOps.add(playerCode, 'default_gun_001', 'GUN');
+
+      socket.emit('player_profile_result', {
+        success: true,
+        playerCode
+      });
+      console.log(`[PROFILE] 玩家档案创建成功：${playerCode}`);
+    } catch (err) {
+      socket.emit('player_profile_result', {
+        success: false,
+        error: '创建失败，请稍后重试'
+      });
+      console.error('[PROFILE] 创建档案失败:', err);
+    }
+  });
+
+  // 玩家登录
+  socket.on('login_player', ({ playerCode, password }) => {
+    const passwordHash = hashPassword(password);
+    const player = playerOps.getByCodeAndPassword(playerCode, passwordHash);
+
+    if (player) {
+      // 更新最后登录时间
+      playerOps.update(playerCode, { last_login: Math.floor(Date.now() / 1000) });
+
+      socket.emit('login_result', {
+        success: true,
+        player: {
+          playerCode: player.player_code,
+          nickname: player.nickname,
+          carrotCount: player.carrot_count,
+          totalGames: player.total_games,
+          winGames: player.win_games,
+          vipLevel: player.vip_level,
+          heightCm: player.height_cm,
+          weightKg: player.weight_kg,
+          birthday: player.birthday,
+          avatarUrl: player.avatar_url,
+          fullbodyImageUrl: player.fullbody_image_url,
+          bio: player.bio,
+          hobbies: JSON.parse(player.hobbies || '[]'),
+          displayedEffectId: player.displayed_effect_id,
+          displayedGunId: player.displayed_gun_id,
+          equippedClothesId: player.equipped_clothes_id,
+          equippedHeadwearId: player.equipped_headwear_id,
+          equippedAccessoryId: player.equipped_accessory_id,
+          equippedShoesId: player.equipped_shoes_id
+        }
+      });
+
+      // 保存玩家档案码到 socket.data
+      socket.data.playerCode = playerCode;
+
+      console.log(`[PROFILE] 玩家登录成功：${playerCode}`);
+    } else {
+      socket.emit('login_result', {
+        success: false,
+        error: '档案码或密码错误'
+      });
+      console.log(`[PROFILE] 玩家登录失败：${playerCode}`);
+    }
+  });
+
+  // 获取玩家档案详情
+  socket.on('get_player_profile', (playerCode) => {
+    const player = playerOps.getByCode(playerCode);
+    if (player) {
+      socket.emit('player_profile', {
+        playerCode: player.player_code,
+        nickname: player.nickname,
+        carrotCount: player.carrot_count,
+        totalGames: player.total_games,
+        winGames: player.win_games,
+        vipLevel: player.vip_level,
+        heightCm: player.height_cm,
+        weightKg: player.weight_kg,
+        birthday: player.birthday,
+        avatarUrl: player.avatar_url,
+        fullbodyImageUrl: player.fullbody_image_url,
+        bio: player.bio,
+        hobbies: JSON.parse(player.hobbies || '[]'),
+        displayedEffectId: player.displayed_effect_id,
+        displayedGunId: player.displayed_gun_id,
+        equippedClothesId: player.equipped_clothes_id,
+        equippedHeadwearId: player.equipped_headwear_id,
+        equippedAccessoryId: player.equipped_accessory_id,
+        equippedShoesId: player.equipped_shoes_id
+      });
+    }
+  });
+
+  // 更新玩家档案
+  socket.on('update_player_profile', ({ playerCode, updates }) => {
+    // 验证是本人操作（简单验证，生产环境需要 token）
+    if (socket.data.playerCode !== playerCode) {
+      socket.emit('update_player_profile_result', {
+        success: false,
+        error: '无权操作'
+      });
+      return;
+    }
+
+    playerOps.update(playerCode, updates);
+    socket.emit('update_player_profile_result', { success: true });
+  });
+
+  // 修改玩家昵称
+  socket.on('change_nickname', ({ playerCode, newNickname }) => {
+    // 验证是本人操作
+    if (socket.data.playerCode !== playerCode) {
+      socket.emit('change_nickname_result', {
+        success: false,
+        error: '无权操作'
+      });
+      return;
+    }
+
+    const result = playerOps.changeNickname(playerCode, newNickname);
+    socket.emit('change_nickname_result', result);
+  });
+
+  // 获取玩家物品背包
+  socket.on('get_player_inventory', (playerCode) => {
+    const inventory = inventoryOps.getAll(playerCode);
+    socket.emit('player_inventory', inventory);
+  });
+
+  // 获取排行榜
+  socket.on('get_leaderboard', () => {
+    const players = leaderboardOps.getAllPlayers();
+    socket.emit('leaderboard_ranking', players);
+  });
+
   // 断开连接
   socket.on('disconnect', () => {
     const { roomId, role } = socket.data;
@@ -654,9 +853,15 @@ const HOST = process.env.HOST || '127.0.0.1';
 // 服务器启动时，从数据库恢复 VIP 房间
 function restoreVipRooms() {
   try {
+    const db = getDb();
     // 获取所有未过期的 VIP 房间
     const stmt = db.prepare("SELECT * FROM vip_rooms WHERE expires_at IS NULL OR expires_at > strftime('%s', 'now')");
-    const activeVipRooms = stmt.all();
+    const activeVipRooms = [];
+    stmt.bind();
+    while (stmt.step()) {
+      activeVipRooms.push(stmt.getAsObject());
+    }
+    stmt.free();
 
     activeVipRooms.forEach(room => {
       rooms.set(room.id, {

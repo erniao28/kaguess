@@ -1,333 +1,475 @@
-import Database from 'better-sqlite3';
+import initSqlJs from 'sql.js';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import fs from 'fs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+const DB_PATH = path.resolve(__dirname, 'rooms.db');
+
+// 全局数据库实例
+let db = null;
+
 // 初始化数据库
-const db = new Database(path.resolve(__dirname, 'rooms.db'));
+async function initDatabase() {
+  const SQL = await initSqlJs();
 
-// 创建表
-db.exec(`
-  -- 房间表
-  CREATE TABLE IF NOT EXISTS rooms (
-    id TEXT PRIMARY KEY,
-    password TEXT,
-    bg_image TEXT DEFAULT '',
-    created_at INTEGER DEFAULT (strftime('%s', 'now')),
-    updated_at INTEGER DEFAULT (strftime('%s', 'now'))
-  );
+  // 加载现有数据库或创建新的
+  if (fs.existsSync(DB_PATH)) {
+    const fileBuffer = fs.readFileSync(DB_PATH);
+    db = new SQL.Database(fileBuffer);
+  } else {
+    db = new SQL.Database();
+  }
 
-  -- 聊天消息表
-  CREATE TABLE IF NOT EXISTS messages (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    room_id TEXT NOT NULL,
-    sender_id TEXT NOT NULL,
-    sender_name TEXT NOT NULL,
-    sender_role TEXT,
-    content TEXT NOT NULL,
-    type TEXT DEFAULT 'text',
-    timestamp INTEGER DEFAULT (strftime('%s', 'now') * 1000),
-    FOREIGN KEY (room_id) REFERENCES rooms(id) ON DELETE CASCADE
-  );
+  // 创建表
+  db.run(`
+    -- 房间表
+    CREATE TABLE IF NOT EXISTS rooms (
+      id TEXT PRIMARY KEY,
+      password TEXT,
+      bg_image TEXT DEFAULT '',
+      created_at INTEGER DEFAULT (strftime('%s', 'now')),
+      updated_at INTEGER DEFAULT (strftime('%s', 'now'))
+    );
 
-  -- 预设背景表
-  CREATE TABLE IF NOT EXISTS backgrounds (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    name TEXT NOT NULL,
-    url TEXT NOT NULL,
-    is_preset INTEGER DEFAULT 1
-  );
+    -- 聊天消息表
+    CREATE TABLE IF NOT EXISTS messages (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      room_id TEXT NOT NULL,
+      sender_id TEXT NOT NULL,
+      sender_name TEXT NOT NULL,
+      sender_role TEXT,
+      content TEXT NOT NULL,
+      type TEXT DEFAULT 'text',
+      timestamp INTEGER DEFAULT (strftime('%s', 'now') * 1000),
+      FOREIGN KEY (room_id) REFERENCES rooms(id) ON DELETE CASCADE
+    );
 
-  -- 玩家胡萝卜记录表（按玩家标识记录）
-  CREATE TABLE IF NOT EXISTS player_carrots (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    player_identifier TEXT UNIQUE NOT NULL,
-    carrot_count INTEGER DEFAULT 0,
-    last_updated INTEGER DEFAULT (strftime('%s', 'now'))
-  );
+    -- 预设背景表
+    CREATE TABLE IF NOT EXISTS backgrounds (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      url TEXT NOT NULL,
+      is_preset INTEGER DEFAULT 1
+    );
 
-  -- 玩家特效解锁表
-  CREATE TABLE IF NOT EXISTS player_effects (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    player_identifier TEXT NOT NULL,
-    effect_id TEXT NOT NULL,
-    unlocked_at INTEGER DEFAULT (strftime('%s', 'now')),
-    UNIQUE(player_identifier, effect_id)
-  );
+    -- 玩家胡萝卜记录表（按玩家标识记录）
+    CREATE TABLE IF NOT EXISTS player_carrots (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      player_identifier TEXT UNIQUE NOT NULL,
+      carrot_count INTEGER DEFAULT 0,
+      last_updated INTEGER DEFAULT (strftime('%s', 'now'))
+    );
 
-  -- 玩家档案表（永久保存玩家数据）
-  CREATE TABLE IF NOT EXISTS player_profiles (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    player_identifier TEXT UNIQUE NOT NULL,
-    nickname TEXT DEFAULT '玩家',
-    total_games INTEGER DEFAULT 0,
-    win_games INTEGER DEFAULT 0,
-    carrot_count INTEGER DEFAULT 0,
-    vip_level INTEGER DEFAULT 0,
-    created_at INTEGER DEFAULT (strftime('%s', 'now')),
-    last_login INTEGER DEFAULT (strftime('%s', 'now'))
-  );
+    -- 玩家特效表
+    CREATE TABLE IF NOT EXISTS player_effects (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      player_identifier TEXT NOT NULL,
+      effect_id TEXT NOT NULL,
+      acquired_at INTEGER DEFAULT (strftime('%s', 'now')),
+      UNIQUE(player_identifier, effect_id)
+    );
 
-  -- 游戏历史记录表
-  CREATE TABLE IF NOT EXISTS game_history (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    room_id TEXT NOT NULL,
-    fox_player TEXT,
-    bunny_player TEXT,
-    winner TEXT,
-    fox_score INTEGER DEFAULT 0,
-    bunny_score INTEGER DEFAULT 0,
-    word_used TEXT,
-    duration INTEGER DEFAULT 0,
-    created_at INTEGER DEFAULT (strftime('%s', 'now'))
-  );
+    -- 玩家档案表（永久保存玩家数据）
+    CREATE TABLE IF NOT EXISTS player_profiles (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      player_identifier TEXT UNIQUE NOT NULL,  -- 保留字段，兼容旧数据
+      player_code TEXT UNIQUE,                  -- 6-8 位自定义档案码（新）
+      password_hash TEXT,                       -- 密码哈希（新）
+      nickname TEXT DEFAULT '玩家',
 
-  -- VIP 房间扩展表（保存房间详细配置）
-  CREATE TABLE IF NOT EXISTS vip_rooms (
-    id TEXT PRIMARY KEY,
-    owner_identifier TEXT NOT NULL,
-    room_name TEXT DEFAULT 'VIP 房间',
-    is_vip INTEGER DEFAULT 1,
-    max_players INTEGER DEFAULT 2,
-    bg_image TEXT DEFAULT '',
-    created_at INTEGER DEFAULT (strftime('%s', 'now')),
-    expires_at INTEGER,
-    FOREIGN KEY (id) REFERENCES rooms(id) ON DELETE CASCADE
-  );
+      -- 身体数据
+      height_cm INTEGER,                        -- 身高 (cm)
+      weight_kg REAL,                           -- 体重 (kg)
+      birthday TEXT,                            -- 生日 YYYY-MM-DD
 
-  -- 创建索引
-  CREATE INDEX IF NOT EXISTS idx_player_profiles_identifier ON player_profiles(player_identifier);
-  CREATE INDEX IF NOT EXISTS idx_game_history_room_id ON game_history(room_id);
-  CREATE INDEX IF NOT EXISTS idx_game_history_created_at ON game_history(created_at);
-  CREATE INDEX IF NOT EXISTS idx_vip_rooms_owner ON vip_rooms(owner_identifier);
-`);
+      -- 个人信息
+      avatar_url TEXT,                          -- 头像 URL
+      fullbody_image_url TEXT,                  -- 全身像 URL
+      bio TEXT,                                 -- 个人签名
 
-// 插入预设背景（如果不存在）
-const presetBackgrounds = [
-  { name: '默认', url: '' },
-  { name: '樱花', url: 'https://images.unsplash.com/photo-1522383225653-ed111181a951?w=1920' },
-  { name: '星空', url: 'https://images.unsplash.com/photo-1534796636912-3b95b3ab5980?w=1920' },
-  { name: '海滩', url: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=1920' },
-  { name: '森林', url: 'https://images.unsplash.com/photo-1448375240586-882707db888b?w=1920' },
-  { name: '雪山', url: 'https://images.unsplash.com/photo-1519681393784-d120267933ba?w=1920' },
-  { name: '城市', url: 'https://images.unsplash.com/photo-1477959858617-67f85cf4f1df?w=1920' },
-  { name: '温馨', url: 'https://images.unsplash.com/photo-1513694203232-719a280e022f?w=1920' },
-];
+      -- 爱好（JSON 数组）
+      hobbies TEXT DEFAULT '[]',                -- ["🎮", "🎵", "📖"]
 
-const existingCount = db.prepare('SELECT COUNT(*) as count FROM backgrounds').get();
-if (existingCount.count === 0) {
-  const insert = db.prepare('INSERT INTO backgrounds (name, url, is_preset) VALUES (?, ?, 1)');
-  const transaction = db.transaction((backgrounds) => {
-    backgrounds.forEach(bg => insert.run(bg.name, bg.url));
-  });
-  transaction(presetBackgrounds);
+      -- 展示配置
+      displayed_effect_id TEXT,                 -- 展示的特效 ID
+      displayed_gun_id TEXT,                    -- 展示的枪械 ID
+      equipped_clothes_id TEXT,                 -- 装备的衣服
+      equipped_headwear_id TEXT,                -- 装备的头饰
+      equipped_accessory_id TEXT,               -- 装备的装饰品
+      equipped_shoes_id TEXT,                   -- 装备的鞋子
+
+      -- 统计
+      total_games INTEGER DEFAULT 0,
+      win_games INTEGER DEFAULT 0,
+      carrot_count INTEGER DEFAULT 0,
+      vip_level INTEGER DEFAULT 0,
+      created_at INTEGER DEFAULT (strftime('%s', 'now')),
+      last_login INTEGER DEFAULT (strftime('%s', 'now'))
+    );
+
+    -- 玩家物品背包表
+    CREATE TABLE IF NOT EXISTS player_inventory (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      player_code TEXT NOT NULL,
+      item_id TEXT NOT NULL,
+      item_type TEXT NOT NULL,  -- 'EFFECT' | 'GUN' | 'CLOTHES' | 'HEADWEAR' | 'ACCESSORY' | 'SHOES'
+      acquired_at INTEGER DEFAULT (strftime('%s', 'now')),
+      UNIQUE(player_code, item_id, item_type)
+    );
+
+    -- 游戏历史记录表
+    CREATE TABLE IF NOT EXISTS game_history (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      room_id TEXT NOT NULL,
+      player_name TEXT NOT NULL,
+      is_winner INTEGER DEFAULT 0,
+      game_date INTEGER DEFAULT (strftime('%s', 'now')),
+      FOREIGN KEY (room_id) REFERENCES rooms(id) ON DELETE CASCADE
+    );
+
+    -- VIP 房间表
+    CREATE TABLE IF NOT EXISTS vip_rooms (
+      id TEXT PRIMARY KEY,
+      owner_player_code TEXT NOT NULL,
+      password TEXT,
+      bg_image TEXT DEFAULT '',
+      created_at INTEGER DEFAULT (strftime('%s', 'now')),
+      updated_at INTEGER DEFAULT (strftime('%s', 'now')),
+      expires_at INTEGER,  -- 可选的过期时间
+      FOREIGN KEY (owner_player_code) REFERENCES player_profiles(player_code) ON DELETE CASCADE
+    );
+  `);
+
+  // 插入默认背景
+  const bgCount = db.exec('SELECT COUNT(*) FROM backgrounds');
+  if (bgCount[0][0] === 0) {
+    db.run(`INSERT INTO backgrounds (name, url, is_preset) VALUES
+      ('默认背景', 'https://images.unsplash.com/photo-1579546929518-9e396f3cc809?w=1920', 1),
+      ('樱花树下', 'https://images.unsplash.com/photo-1522383225653-ed111181a951?w=1920', 1),
+      ('海边沙滩', 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=1920', 1),
+      ('城市夜景', 'https://images.unsplash.com/photo-1519501025264-65ba15a82390?w=1920', 1),
+      ('森林小屋', 'https://images.unsplash.com/photo-1448375240586-882707db888b?w=1920', 1),
+      ('雪山风景', 'https://images.unsplash.com/photo-1519681393784-d120267933ba?w=1920', 1),
+      ('星空背景', 'https://images.unsplash.com/photo-1534796636912-3b95b3ab5980?w=1920', 1),
+      ('春日草原', 'https://images.unsplash.com/photo-1490750967868-58cb75063ed4?w=1920', 1)
+    `);
+  }
+
+  saveDatabase();
+  console.log('[DB] 数据库初始化成功');
+  return db;
 }
+
+// 保存数据库到文件
+function saveDatabase() {
+  if (db) {
+    const data = db.export();
+    const buffer = Buffer.from(data);
+    fs.writeFileSync(DB_PATH, buffer);
+  }
+}
+
+// 等待数据库初始化完成的 Promise
+let dbReady = null;
+
+export const waitForDb = () => {
+  if (!dbReady) {
+    dbReady = initDatabase();
+  }
+  return dbReady;
+};
+
+// 获取数据库实例（需要先调用 waitForDb）
+export const getDb = () => {
+  if (!db) {
+    throw new Error('Database not initialized. Call waitForDb() first.');
+  }
+  return db;
+};
 
 // 房间操作
 export const roomOps = {
-  // 创建房间
-  create: (id, password) => {
-    const stmt = db.prepare(`
-      INSERT INTO rooms (id, password, created_at, updated_at)
-      VALUES (?, ?, strftime('%s', 'now'), strftime('%s', 'now'))
-    `);
-    return stmt.run(id, password);
+  create: (roomId, password = null) => {
+    if (!db) return;
+    const stmt = db.prepare('INSERT OR REPLACE INTO rooms (id, password, updated_at) VALUES (?, ?, strftime("%s", "now"))');
+    stmt.run([roomId, password]);
+    saveDatabase();
   },
 
-  // 获取房间
-  get: (id) => {
+  get: (roomId) => {
+    if (!db) return null;
     const stmt = db.prepare('SELECT * FROM rooms WHERE id = ?');
-    return stmt.get(id);
+    stmt.bind([roomId]);
+    if (stmt.step()) {
+      const row = stmt.getAsObject();
+      stmt.free();
+      return row;
+    }
+    stmt.free();
+    return null;
   },
 
-  // 验证密码
-  verifyPassword: (id, password) => {
-    const room = roomOps.get(id);
-    if (!room) return { exists: false, valid: false };
-    if (!room.password) return { exists: true, valid: true };
-    return { exists: true, valid: room.password === password };
-  },
-
-  // 更新背景
-  updateBackground: (id, bgImage) => {
-    const stmt = db.prepare(`
-      UPDATE rooms SET bg_image = ?, updated_at = strftime('%s', 'now') WHERE id = ?
-    `);
-    return stmt.run(bgImage, id);
-  },
-
-  // 更新密码
-  updatePassword: (id, password) => {
-    const stmt = db.prepare(`
-      UPDATE rooms SET password = ?, updated_at = strftime('%s', 'now') WHERE id = ?
-    `);
-    return stmt.run(password, id);
-  },
-
-  // 删除房间
-  delete: (id) => {
+  delete: (roomId) => {
+    if (!db) return;
     const stmt = db.prepare('DELETE FROM rooms WHERE id = ?');
-    return stmt.run(id);
+    stmt.run([roomId]);
+    saveDatabase();
+  },
+
+  exists: (roomId) => {
+    if (!db) return false;
+    const stmt = db.prepare('SELECT 1 FROM rooms WHERE id = ? LIMIT 1');
+    stmt.bind([roomId]);
+    const exists = stmt.step();
+    stmt.free();
+    return exists;
+  },
+
+  update: (roomId, updates) => {
+    if (!db) return;
+    const allowed = ['password', 'bg_image'];
+    const fields = [];
+    const values = [];
+    Object.entries(updates).forEach(([key, value]) => {
+      if (allowed.includes(key)) {
+        fields.push(`${key} = ?`);
+        values.push(value);
+      }
+    });
+    if (fields.length === 0) return;
+    fields.push('updated_at = strftime("%s", "now")');
+    values.push(roomId);
+    const stmt = db.prepare(`UPDATE rooms SET ${fields.join(', ')} WHERE id = ?`);
+    stmt.run(values);
+    saveDatabase();
   },
 };
 
 // 消息操作
 export const messageOps = {
-  // 添加消息
-  add: (roomId, message) => {
-    const stmt = db.prepare(`
-      INSERT INTO messages (room_id, sender_id, sender_name, sender_role, content, type, timestamp)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
-    `);
-    return stmt.run(
-      roomId,
-      message.senderId,
-      message.senderName,
-      message.senderRole || null,
-      message.content,
-      message.type,
-      message.timestamp
-    );
+  add: (roomId, senderId, senderName, senderRole, content, type = 'text') => {
+    if (!db) return;
+    const stmt = db.prepare('INSERT INTO messages (room_id, sender_id, sender_name, sender_role, content, type) VALUES (?, ?, ?, ?, ?, ?)');
+    stmt.run([roomId, senderId, senderName, senderRole, content, type]);
+    saveDatabase();
   },
 
-  // 获取历史消息
-  getHistory: (roomId, limit = 100) => {
-    const stmt = db.prepare(`
-      SELECT * FROM messages
-      WHERE room_id = ?
-      ORDER BY timestamp ASC
-      LIMIT ?
-    `);
-    return stmt.all(roomId, limit).map(row => ({
-      id: `msg-${row.id}`,
-      senderId: row.sender_id,
-      senderName: row.sender_name,
-      senderRole: row.sender_role,
-      content: row.content,
-      type: row.type,
-      timestamp: row.timestamp
-    }));
-  },
-
-  // 删除房间所有消息
-  deleteByRoom: (roomId) => {
-    const stmt = db.prepare('DELETE FROM messages WHERE room_id = ?');
-    return stmt.run(roomId);
+  getByRoom: (roomId) => {
+    if (!db) return [];
+    const stmt = db.prepare('SELECT * FROM messages WHERE room_id = ? ORDER BY timestamp ASC LIMIT 100');
+    stmt.bind([roomId]);
+    const messages = [];
+    while (stmt.step()) {
+      messages.push(stmt.getAsObject());
+    }
+    stmt.free();
+    return messages;
   },
 };
 
 // 背景操作
 export const backgroundOps = {
-  // 获取所有背景
   getAll: () => {
-    const stmt = db.prepare('SELECT * FROM backgrounds ORDER BY id');
-    return stmt.all();
+    if (!db) return [];
+    const stmt = db.prepare('SELECT * FROM backgrounds');
+    stmt.bind();
+    const backgrounds = [];
+    while (stmt.step()) {
+      backgrounds.push(stmt.getAsObject());
+    }
+    stmt.free();
+    return backgrounds;
   },
 
-  // 添加自定义背景
-  addCustom: (name, url) => {
-    const stmt = db.prepare('INSERT INTO backgrounds (name, url, is_preset) VALUES (?, ?, 0)');
-    return stmt.run(name, url);
+  add: (name, url, isPreset = 0) => {
+    if (!db) return;
+    const stmt = db.prepare('INSERT INTO backgrounds (name, url, is_preset) VALUES (?, ?, ?)');
+    stmt.run([name, url, isPreset]);
+    saveDatabase();
   },
 
-  // 删除自定义背景
-  deleteCustom: (id) => {
+  delete: (id) => {
+    if (!db) return;
     const stmt = db.prepare('DELETE FROM backgrounds WHERE id = ? AND is_preset = 0');
-    return stmt.run(id);
+    stmt.run([id]);
+    saveDatabase();
   },
 };
 
 // 胡萝卜操作
 export const carrotOps = {
-  // 获取玩家胡萝卜数量
-  getCount: (playerIdentifier) => {
+  get: (playerIdentifier) => {
+    if (!db) return 0;
     const stmt = db.prepare('SELECT carrot_count FROM player_carrots WHERE player_identifier = ?');
-    const result = stmt.get(playerIdentifier);
-    return result ? result.carrot_count : 0;
+    stmt.bind([playerIdentifier]);
+    if (stmt.step()) {
+      const row = stmt.getAsObject();
+      stmt.free();
+      return row.carrot_count;
+    }
+    stmt.free();
+    return 0;
   },
 
-  // 增加胡萝卜
-  addCarrot: (playerIdentifier, count = 1) => {
+  upsert: (playerIdentifier, delta) => {
+    if (!db) return;
+    const stmt = db.prepare(`
+      INSERT INTO player_carrots (player_identifier, carrot_count, last_updated)
+      VALUES (?, COALESCE((SELECT carrot_count FROM player_carrots WHERE player_identifier = ?), 0) + ?, strftime('%s', 'now'))
+      ON CONFLICT(player_identifier) DO UPDATE SET carrot_count = carrot_count + ?, last_updated = strftime('%s', 'now')
+    `);
+    stmt.run([playerIdentifier, playerIdentifier, delta, delta]);
+    saveDatabase();
+  },
+
+  set: (playerIdentifier, count) => {
+    if (!db) return;
     const stmt = db.prepare(`
       INSERT INTO player_carrots (player_identifier, carrot_count, last_updated)
       VALUES (?, ?, strftime('%s', 'now'))
-      ON CONFLICT(player_identifier) DO UPDATE SET
-        carrot_count = carrot_count + ?,
-        last_updated = strftime('%s', 'now')
+      ON CONFLICT(player_identifier) DO UPDATE SET carrot_count = ?, last_updated = strftime('%s', 'now')
     `);
-    return stmt.run(playerIdentifier, count, count);
-  },
-
-  // 获取所有玩家排名
-  getLeaderboard: (limit = 10) => {
-    const stmt = db.prepare(`
-      SELECT player_identifier, carrot_count, last_updated
-      FROM player_carrots
-      ORDER BY carrot_count DESC
-      LIMIT ?
-    `);
-    return stmt.all(limit);
+    stmt.run([playerIdentifier, count, count]);
+    saveDatabase();
   },
 };
 
-// 特效操作
+// 玩家特效操作
 export const effectOps = {
-  // 获取玩家解锁的特效
-  getUnlocked: (playerIdentifier) => {
+  getPlayerEffects: (playerIdentifier) => {
+    if (!db) return [];
     const stmt = db.prepare('SELECT effect_id FROM player_effects WHERE player_identifier = ?');
-    return stmt.all(playerIdentifier).map(row => row.effect_id);
+    stmt.bind([playerIdentifier]);
+    const effects = [];
+    while (stmt.step()) {
+      effects.push(stmt.getAsObject().effect_id);
+    }
+    stmt.free();
+    return effects;
   },
 
-  // 解锁特效
-  unlock: (playerIdentifier, effectId) => {
-    const stmt = db.prepare(`
-      INSERT INTO player_effects (player_identifier, effect_id, unlocked_at)
-      VALUES (?, ?, strftime('%s', 'now'))
-      ON CONFLICT(player_identifier, effect_id) DO NOTHING
-    `);
-    return stmt.run(playerIdentifier, effectId);
+  addEffect: (playerIdentifier, effectId) => {
+    if (!db) return;
+    const stmt = db.prepare('INSERT OR IGNORE INTO player_effects (player_identifier, effect_id) VALUES (?, ?)');
+    stmt.run([playerIdentifier, effectId]);
+    saveDatabase();
   },
 
-  // 批量解锁特效
-  unlockMany: (playerIdentifier, effectIds) => {
-    const stmt = db.prepare(`
-      INSERT INTO player_effects (player_identifier, effect_id, unlocked_at)
-      VALUES (?, ?, strftime('%s', 'now'))
-      ON CONFLICT(player_identifier, effect_id) DO NOTHING
-    `);
-    const transaction = db.transaction((ids) => {
-      ids.forEach(id => stmt.run(playerIdentifier, id));
-    });
-    transaction(effectIds);
+  hasEffect: (playerIdentifier, effectId) => {
+    if (!db) return false;
+    const stmt = db.prepare('SELECT 1 FROM player_effects WHERE player_identifier = ? AND effect_id = ? LIMIT 1');
+    stmt.bind([playerIdentifier, effectId]);
+    const has = stmt.step();
+    stmt.free();
+    return has;
   },
 };
 
 // 玩家档案操作
 export const playerOps = {
-  // 创建或更新玩家档案
-  upsert: (playerIdentifier, data = {}) => {
-    const stmt = db.prepare(`
-      INSERT INTO player_profiles (player_identifier, nickname, carrot_count, last_login)
-      VALUES (?, ?, ?, strftime('%s', 'now'))
-      ON CONFLICT(player_identifier) DO UPDATE SET
-        nickname = excluded.nickname,
-        carrot_count = excluded.carrot_count,
-        last_login = strftime('%s', 'now')
-    `);
-    return stmt.run(playerIdentifier, data.nickname || '玩家', data.carrot_count || 0);
+  // 检查档案码是否可用
+  isCodeAvailable: (playerCode) => {
+    if (!db) return false;
+    const stmt = db.prepare('SELECT 1 FROM player_profiles WHERE player_code = ? LIMIT 1');
+    stmt.bind([playerCode]);
+    const exists = stmt.step();
+    stmt.free();
+    return !exists;
   },
 
-  // 获取玩家档案
-  get: (playerIdentifier) => {
+  // 通过档案码 + 密码获取玩家（登录用）
+  getByCodeAndPassword: (playerCode, passwordHash) => {
+    if (!db) return null;
+    const stmt = db.prepare('SELECT * FROM player_profiles WHERE player_code = ? AND password_hash = ?');
+    stmt.bind([playerCode, passwordHash]);
+    if (stmt.step()) {
+      const player = stmt.getAsObject();
+      stmt.free();
+      return player;
+    }
+    stmt.free();
+    return null;
+  },
+
+  // 通过档案码获取玩家
+  getByCode: (playerCode) => {
+    if (!db) return null;
+    const stmt = db.prepare('SELECT * FROM player_profiles WHERE player_code = ?');
+    stmt.bind([playerCode]);
+    if (stmt.step()) {
+      const player = stmt.getAsObject();
+      stmt.free();
+      return player;
+    }
+    stmt.free();
+    return null;
+  },
+
+  // 创建玩家档案（带密码）
+  create: (playerCode, passwordHash, nickname = '玩家') => {
+    if (!db) return;
+    const stmt = db.prepare(`
+      INSERT INTO player_profiles (player_code, password_hash, nickname, last_login)
+      VALUES (?, ?, ?, strftime('%s', 'now'))
+    `);
+    stmt.run([playerCode, passwordHash, nickname]);
+    saveDatabase();
+  },
+
+  // 创建或更新玩家档案（兼容旧版，使用 player_identifier）
+  upsert: (playerIdentifier, data = {}) => {
+    if (!db) return;
+    const existing = playerOps.getByIdentifier(playerIdentifier);
+    if (existing) {
+      playerOps.update(playerIdentifier, data);
+    } else {
+      const stmt = db.prepare(`
+        INSERT INTO player_profiles (player_identifier, nickname, carrot_count, last_login)
+        VALUES (?, ?, ?, strftime('%s', 'now'))
+      `);
+      stmt.run([playerIdentifier, data.nickname || '玩家', data.carrot_count || 0]);
+      saveDatabase();
+    }
+  },
+
+  // 通过 player_identifier 获取玩家（旧版兼容）
+  getByIdentifier: (playerIdentifier) => {
+    if (!db) return null;
     const stmt = db.prepare('SELECT * FROM player_profiles WHERE player_identifier = ?');
-    return stmt.get(playerIdentifier);
+    stmt.bind([playerIdentifier]);
+    if (stmt.step()) {
+      const player = stmt.getAsObject();
+      stmt.free();
+      return player;
+    }
+    stmt.free();
+    return null;
+  },
+
+  // 获取玩家档案（支持 player_identifier 或 player_code）
+  get: (playerIdentifier) => {
+    if (!db) return null;
+    const stmt = db.prepare('SELECT * FROM player_profiles WHERE player_identifier = ? OR player_code = ?');
+    stmt.bind([playerIdentifier, playerIdentifier]);
+    if (stmt.step()) {
+      const player = stmt.getAsObject();
+      stmt.free();
+      return player;
+    }
+    stmt.free();
+    return null;
   },
 
   // 更新玩家数据
-  update: (playerIdentifier, updates) => {
-    const allowed = ['nickname', 'total_games', 'win_games', 'carrot_count', 'vip_level', 'last_login'];
+  update: (playerCode, updates) => {
+    if (!db) return;
+    const allowed = ['nickname', 'total_games', 'win_games', 'carrot_count', 'vip_level',
+                     'height_cm', 'weight_kg', 'birthday', 'avatar_url', 'fullbody_image_url',
+                     'bio', 'hobbies', 'displayed_effect_id', 'displayed_gun_id',
+                     'equipped_clothes_id', 'equipped_headwear_id', 'equipped_accessory_id', 'equipped_shoes_id'];
     const fields = [];
     const values = [];
     Object.entries(updates).forEach(([key, value]) => {
@@ -337,105 +479,176 @@ export const playerOps = {
       }
     });
     if (fields.length === 0) return;
-    const stmt = db.prepare(`UPDATE player_profiles SET ${fields.join(', ')} WHERE player_identifier = ?`);
-    values.push(playerIdentifier);
-    return stmt.run(...values);
+    values.push(playerCode);
+    const stmt = db.prepare(`UPDATE player_profiles SET ${fields.join(', ')} WHERE player_code = ?`);
+    stmt.run(values);
+    saveDatabase();
   },
 
-  // 获取玩家排名
-  getLeaderboard: (limit = 10, orderBy = 'carrot_count') => {
-    const validOrders = ['carrot_count', 'win_games', 'total_games', 'vip_level'];
-    const order = validOrders.includes(orderBy) ? orderBy : 'carrot_count';
-    const stmt = db.prepare(`SELECT * FROM player_profiles ORDER BY ${order} DESC LIMIT ?`);
-    return stmt.all(limit);
+  // 修改玩家昵称（仅改名，不改变档案码）
+  changeNickname: (playerCode, newNickname) => {
+    if (!db) return { success: false, error: '数据库未初始化' };
+
+    // 检查新昵称是否合法（1-20 字符）
+    if (!newNickname || newNickname.length < 1 || newNickname.length > 20) {
+      return { success: false, error: '昵称长度 1-20 个字符' };
+    }
+
+    const stmt = db.prepare('UPDATE player_profiles SET nickname = ? WHERE player_code = ?');
+    stmt.run([newNickname, playerCode]);
+    saveDatabase();
+    return { success: true };
   },
 };
 
-// 游戏历史操作
-export const gameHistoryOps = {
-  // 记录游戏
-  add: (gameData) => {
-    const stmt = db.prepare(`
-      INSERT INTO game_history (room_id, fox_player, bunny_player, winner, fox_score, bunny_score, word_used, duration)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    `);
-    return stmt.run(
-      gameData.roomId,
-      gameData.foxPlayer,
-      gameData.bunnyPlayer,
-      gameData.winner,
-      gameData.foxScore,
-      gameData.bunnyScore,
-      gameData.wordUsed,
-      gameData.duration
-    );
+// 玩家物品背包操作
+export const inventoryOps = {
+  // 获取玩家所有物品
+  getAll: (playerCode) => {
+    if (!db) return [];
+    const stmt = db.prepare('SELECT * FROM player_inventory WHERE player_code = ?');
+    stmt.bind([playerCode]);
+    const inventory = [];
+    while (stmt.step()) {
+      inventory.push(stmt.getAsObject());
+    }
+    stmt.free();
+    return inventory;
   },
 
-  // 获取玩家历史
-  getPlayerHistory: (playerIdentifier, limit = 20) => {
+  // 添加物品
+  add: (playerCode, itemId, itemType) => {
+    if (!db) return;
     const stmt = db.prepare(`
-      SELECT * FROM game_history
-      WHERE fox_player = ? OR bunny_player = ?
-      ORDER BY created_at DESC LIMIT ?
+      INSERT OR IGNORE INTO player_inventory (player_code, item_id, item_type, acquired_at)
+      VALUES (?, ?, ?, strftime('%s', 'now'))
     `);
-    return stmt.all(playerIdentifier, playerIdentifier, limit);
+    stmt.run([playerCode, itemId, itemType]);
+    saveDatabase();
   },
 
-  // 获取房间历史
-  getRoomHistory: (roomId, limit = 10) => {
-    const stmt = db.prepare(`
-      SELECT * FROM game_history WHERE room_id = ? ORDER BY created_at DESC LIMIT ?
-    `);
-    return stmt.all(roomId, limit);
+  // 检查玩家是否拥有某物品
+  has: (playerCode, itemId) => {
+    if (!db) return false;
+    const stmt = db.prepare('SELECT 1 FROM player_inventory WHERE player_code = ? AND item_id = ? LIMIT 1');
+    stmt.bind([playerCode, itemId]);
+    const has = stmt.step();
+    stmt.free();
+    return has;
   },
 };
 
 // VIP 房间操作
 export const vipRoomOps = {
-  // 创建 VIP 房间
-  create: (roomId, ownerIdentifier, options = {}) => {
-    const stmt = db.prepare(`
-      INSERT INTO vip_rooms (id, owner_identifier, room_name, is_vip, bg_image, expires_at)
-      VALUES (?, ?, ?, ?, ?, ?)
-    `);
-    const expiresAt = options.expiresAt || null;
-    return stmt.run(roomId, ownerIdentifier, options.name || 'VIP 房间', 1, options.bgImage || '', expiresAt);
+  create: (roomId, ownerPlayerCode, password = null) => {
+    if (!db) return;
+    const stmt = db.prepare('INSERT INTO vip_rooms (id, owner_player_code, password) VALUES (?, ?, ?)');
+    stmt.run([roomId, ownerPlayerCode, password]);
+    saveDatabase();
   },
 
-  // 获取 VIP 房间
   get: (roomId) => {
+    if (!db) return null;
     const stmt = db.prepare('SELECT * FROM vip_rooms WHERE id = ?');
-    return stmt.get(roomId);
+    stmt.bind([roomId]);
+    if (stmt.step()) {
+      const room = stmt.getAsObject();
+      stmt.free();
+      return room;
+    }
+    stmt.free();
+    return null;
   },
 
-  // 获取玩家的所有 VIP 房间
-  getPlayerRooms: (playerIdentifier) => {
-    const stmt = db.prepare('SELECT * FROM vip_rooms WHERE owner_identifier = ? ORDER BY created_at DESC');
-    return stmt.all(playerIdentifier);
-  },
-
-  // 更新 VIP 房间
-  update: (roomId, updates) => {
-    const allowed = ['room_name', 'is_vip', 'bg_image', 'expires_at'];
-    const fields = [];
-    const values = [];
-    Object.entries(updates).forEach(([key, value]) => {
-      if (allowed.includes(key)) {
-        fields.push(`${key} = ?`);
-        values.push(value);
-      }
-    });
-    if (fields.length === 0) return;
-    const stmt = db.prepare(`UPDATE vip_rooms SET ${fields.join(', ')} WHERE id = ?`);
-    values.push(roomId);
-    return stmt.run(...values);
-  },
-
-  // 删除 VIP 房间
   delete: (roomId) => {
+    if (!db) return;
     const stmt = db.prepare('DELETE FROM vip_rooms WHERE id = ?');
-    return stmt.run(roomId);
+    stmt.run([roomId]);
+    saveDatabase();
+  },
+
+  exists: (roomId) => {
+    if (!db) return false;
+    const stmt = db.prepare('SELECT 1 FROM vip_rooms WHERE id = ? LIMIT 1');
+    stmt.bind([roomId]);
+    const exists = stmt.step();
+    stmt.free();
+    return exists;
+  },
+
+  getByOwner: (ownerPlayerCode) => {
+    if (!db) return [];
+    const stmt = db.prepare('SELECT * FROM vip_rooms WHERE owner_player_code = ?');
+    stmt.bind([ownerPlayerCode]);
+    const rooms = [];
+    while (stmt.step()) {
+      rooms.push(stmt.getAsObject());
+    }
+    stmt.free();
+    return rooms;
   },
 };
 
-export default db;
+// 游戏历史操作
+export const gameHistoryOps = {
+  add: (roomId, playerName, isWinner) => {
+    if (!db) return;
+    const stmt = db.prepare('INSERT INTO game_history (room_id, player_name, is_winner) VALUES (?, ?, ?)');
+    stmt.run([roomId, playerName, isWinner ? 1 : 0]);
+    saveDatabase();
+  },
+
+  getByRoom: (roomId) => {
+    if (!db) return [];
+    const stmt = db.prepare('SELECT * FROM game_history WHERE room_id = ? ORDER BY game_date DESC LIMIT 50');
+    stmt.bind([roomId]);
+    const history = [];
+    while (stmt.step()) {
+      history.push(stmt.getAsObject());
+    }
+    stmt.free();
+    return history;
+  },
+
+  getHonorHall: () => {
+    if (!db) return [];
+    const stmt = db.prepare(`
+      SELECT player_name, COUNT(*) as win_count
+      FROM game_history
+      WHERE is_winner = 1
+      GROUP BY player_name
+      ORDER BY win_count DESC
+      LIMIT 50
+    `);
+    stmt.bind();
+    const honorRoll = [];
+    while (stmt.step()) {
+      honorRoll.push(stmt.getAsObject());
+    }
+    stmt.free();
+    return honorRoll;
+  },
+};
+
+// 排行榜操作
+export const leaderboardOps = {
+  // 获取所有玩家数据（用于排行榜）
+  getAllPlayers: () => {
+    if (!db) return [];
+    const stmt = db.prepare(`
+      SELECT player_code, nickname, carrot_count, total_games, win_games, vip_level
+      FROM player_profiles
+      ORDER BY carrot_count DESC
+      LIMIT 100
+    `);
+    stmt.bind();
+    const players = [];
+    while (stmt.step()) {
+      players.push(stmt.getAsObject());
+    }
+    stmt.free();
+    return players;
+  },
+};
+
+export default getDb;

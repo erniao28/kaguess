@@ -14,6 +14,9 @@ import PrivateRoomModal from './components/PrivateRoomModal';
 import RoomSettings from './components/RoomSettings';
 import HonorHall from './components/HonorHall';
 import EffectShop from './components/EffectShop';
+import PlayerProfileModal from './components/PlayerProfileModal';
+import ArchiveRoom from './components/ArchiveRoom';
+import ArchiveRoomRanking from './components/ArchiveRoomRanking';
 
 const App: React.FC = () => {
   const [gameState, setGameState] = useState<GameState>(GameState.ROOM);
@@ -61,6 +64,18 @@ const App: React.FC = () => {
   const [showBirthdayEffect, setShowBirthdayEffect] = useState(false);
   const [birthdayAnimationStarted, setBirthdayAnimationStarted] = useState(false);
   const [showBackgroundElements, setShowBackgroundElements] = useState(false);
+
+  // 玩家档案系统相关状态
+  const [playerProfile, setPlayerProfile] = useState<any>(null);
+  const [showProfileModal, setShowProfileModal] = useState(false);
+  const [showArchiveRoom, setShowArchiveRoom] = useState(false);
+  const [hasCheckedProfile, setHasCheckedProfile] = useState(false);
+  const [showArchiveRanking, setShowArchiveRanking] = useState(false);
+  const [archiveRankings, setArchiveRankings] = useState<any[]>([]);
+
+  // 聊天框设置
+  const [chatFontSize, setChatFontSize] = useState(14);
+  const [chatBgImage, setChatBgImage] = useState('');
 
   useEffect(() => {
     playerRoleRef.current = playerRole;
@@ -336,6 +351,33 @@ const App: React.FC = () => {
       setShowBirthdayEffect(true);
     });
 
+    // 玩家档案系统事件
+    newSocket.on('login_result', (result: { success: boolean; player?: any; error?: string }) => {
+      if (result.success && result.player) {
+        setPlayerProfile(result.player);
+        console.log('[PROFILE] 登录成功:', result.player);
+      }
+    });
+
+    newSocket.on('update_player_profile_result', (result: { success: boolean; error?: string }) => {
+      if (result.success) {
+        console.log('[PROFILE] 更新成功');
+      } else {
+        console.error('[PROFILE] 更新失败:', result.error);
+      }
+    });
+
+    // 改名结果
+    newSocket.on('change_nickname_result', (result: { success: boolean; error?: string }) => {
+      if (result.success) {
+        console.log('[PROFILE] 改名成功');
+        // 更新本地玩家档案
+        setPlayerProfile((prev: any) => prev ? { ...prev, nickname: result.newNickname } : null);
+      } else {
+        console.error('[PROFILE] 改名失败:', result.error);
+      }
+    });
+
     return () => {
       newSocket.off('connect');
       newSocket.off('room_created');
@@ -366,8 +408,26 @@ const App: React.FC = () => {
       newSocket.off('effect_error');
       newSocket.off('timed_animation');
       newSocket.off('birthday_effect');
+      newSocket.off('login_result');
+      newSocket.off('update_player_profile_result');
+      newSocket.off('change_nickname_result');
+      newSocket.off('leaderboard_ranking');
     };
   }, []);
+
+  // 监听排行榜数据
+  useEffect(() => {
+    if (!socket) return;
+
+    socket.on('leaderboard_ranking', (players: any[]) => {
+      setArchiveRankings(players);
+      setShowArchiveRanking(true);
+    });
+
+    return () => {
+      socket.off('leaderboard_ranking');
+    };
+  }, [socket]);
 
   const triggerLocalEffect = (from: 'FOX' | 'BUNNY') => {
     const newEffect = { id: Date.now(), type: from === 'FOX' ? 'ICE' as const : 'TICKET' as const };
@@ -525,6 +585,38 @@ const App: React.FC = () => {
     }, 5000);
   };
 
+  // 玩家档案系统处理函数
+  const handleProfileLoaded = (profile: any) => {
+    setPlayerProfile(profile);
+    setShowProfileModal(false);
+    console.log('[PROFILE] 档案已加载:', profile);
+  };
+
+  const handleOpenArchiveRoom = () => {
+    if (playerProfile) {
+      setShowArchiveRoom(true);
+    } else {
+      setShowProfileModal(true);
+    }
+  };
+
+  const handleUpdatePlayerProfile = (updates: any) => {
+    setPlayerProfile((prev: any) => ({ ...prev, ...updates }));
+  };
+
+  const handleChangeNickname = (newNickname: string) => {
+    if (socket && playerProfile?.playerCode) {
+      socket.emit('change_nickname', {
+        playerCode: playerProfile.playerCode,
+        newNickname
+      });
+    }
+  };
+
+  const handleOpenArchiveRanking = () => {
+    socket?.emit('get_leaderboard');
+  };
+
   // 进入房间时获取胡萝卜数量
   useEffect(() => {
     if (roomId && socket?.connected) {
@@ -577,6 +669,23 @@ const App: React.FC = () => {
           <div>
             <div className="text-xs font-bold text-slate-400">我的胡萝卜</div>
             <div className="text-2xl font-black text-yellow-600 leading-none">{myCarrotCount}</div>
+          </div>
+        </div>
+      </div>
+
+      {/* 档案室入口 - 左上角 */}
+      <div
+        className="fixed top-6 left-6 z-40 animate-in fade-in slide-in-from-left-8 duration-700 cursor-pointer hover:scale-105 transition-transform"
+        onClick={handleOpenArchiveRoom}
+        title="点击打开档案室"
+      >
+        <div className="bg-white rounded-full shadow-xl border-4 border-indigo-400 px-6 py-3 flex items-center gap-3">
+          <span className="text-4xl">🆔</span>
+          <div>
+            <div className="text-xs font-bold text-slate-400">我的档案</div>
+            <div className="text-sm font-black text-indigo-600 leading-none">
+              {playerProfile ? playerProfile.nickname : '未登录'}
+            </div>
           </div>
         </div>
       </div>
@@ -761,7 +870,8 @@ const App: React.FC = () => {
       )}
 
       {gameState === GameState.PLAYING && (
-        <div className="w-full max-w-6xl space-y-12 z-10 animate-in zoom-in-95 duration-500">
+        <div className="w-full max-w-6xl space-y-8 z-10 animate-in zoom-in-95 duration-500">
+          {/* 得分条 */}
           <div className="bg-white rounded-[50px] p-3 shadow-2xl border-4 border-slate-50 flex items-center relative h-28 overflow-hidden">
             <div
               className="h-full rounded-[40px] transition-all duration-1000 bg-gradient-to-r from-orange-400 to-orange-500 flex items-center justify-start px-8 shadow-inner"
@@ -781,6 +891,22 @@ const App: React.FC = () => {
             </div>
           </div>
 
+          {/* 聊天框 - 移到中间位置 */}
+          <div className="max-w-2xl mx-auto">
+            <ChatBox
+              messages={chatMessages}
+              onSendMessage={handleSendMessage}
+              isConnected={!!socket?.connected && !!roomId}
+              mySocketId={mySocketId}
+              onClearHistory={isPrivateRoom ? handleClearChatHistory : undefined}
+              chatFontSize={chatFontSize}
+              chatBgImage={chatBgImage}
+              onFontChange={setChatFontSize}
+              onBgChange={setChatBgImage}
+            />
+          </div>
+
+          {/* 分数板和禁语字 */}
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
             <div className="lg:col-span-3 lg:sticky lg:top-8 order-2 lg:order-1">
               <ScoreBoard player={players[0]} onUpdateScore={handleUpdateScore} />
@@ -826,19 +952,7 @@ const App: React.FC = () => {
         onUpdatePassword={handleUpdateRoomPassword}
       />
 
-      {/* 聊天框 - 私密房间模式下显示清空按钮 */}
-      {gameState === GameState.PLAYING && (
-        <div className="max-w-2xl mx-auto z-10">
-          <ChatBox
-            messages={chatMessages}
-            onSendMessage={handleSendMessage}
-            isConnected={!!socket?.connected && !!roomId}
-            mySocketId={mySocketId}
-            onClearHistory={isPrivateRoom ? handleClearChatHistory : undefined}
-          />
-        </div>
-      )}
-
+      {/* 聊天框设置已移到上方得分条下方 */}
       {/* 荣誉室模态框 */}
       <HonorHall
         isOpen={showHonorHall}
@@ -857,6 +971,31 @@ const App: React.FC = () => {
         onPurchase={handlePurchaseEffect}
         onSelectEffect={handleSelectEffect}
         selectedEffectId={selectedEffectId}
+      />
+
+      {/* 玩家档案创建/登录模态框 */}
+      <PlayerProfileModal
+        isOpen={showProfileModal}
+        onClose={() => setShowProfileModal(false)}
+        socket={socket}
+        onProfileLoaded={handleProfileLoaded}
+      />
+
+      {/* 档案室模态框 */}
+      <ArchiveRoom
+        isOpen={showArchiveRoom}
+        onClose={() => setShowArchiveRoom(false)}
+        playerProfile={playerProfile}
+        socket={socket}
+        onUpdateProfile={handleUpdatePlayerProfile}
+        onChangeNickname={handleChangeNickname}
+      />
+
+      {/* 档案室排行榜模态框 */}
+      <ArchiveRoomRanking
+        isOpen={showArchiveRanking}
+        onClose={() => setShowArchiveRanking(false)}
+        rankings={archiveRankings}
       />
     </div>
   );

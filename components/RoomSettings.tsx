@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Background } from '../types';
 
 interface RoomSettingsProps {
@@ -33,6 +33,8 @@ const RoomSettings: React.FC<RoomSettingsProps> = ({
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [selectedBg, setSelectedBg] = useState(currentBg);
+  const [customBg, setCustomBg] = useState('');
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (isOpen) {
@@ -56,6 +58,29 @@ const RoomSettings: React.FC<RoomSettingsProps> = ({
   const handleBgSelect = (url: string) => {
     setSelectedBg(url);
     onUpdateBg(url);
+  };
+
+  const handleCustomBgUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      alert('请选择图片文件');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const base64 = event.target?.result as string;
+      setCustomBg(base64);
+      setSelectedBg(base64);
+      onUpdateBg(base64);
+    };
+    reader.readAsDataURL(file);
+
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
   };
 
   return (
@@ -108,11 +133,40 @@ const RoomSettings: React.FC<RoomSettingsProps> = ({
           </button>
         </div>
 
-        {/* 内容区域 */}
-        <div className="flex-1 overflow-y-auto p-6">
-          {activeTab === 'background' ? (
-            <div className="space-y-4">
-              <p className="text-sm text-slate-500 mb-3">选择一个背景图作为房间的默认背景：</p>
+        {/* 内容区域 - 背景图 */}
+        {activeTab === 'background' && (
+          <div className="space-y-4">
+            {/* 自定义背景 */}
+            <div className="bg-indigo-50 rounded-xl p-4 border-2 border-indigo-200">
+              <p className="text-sm font-bold text-indigo-700 mb-3">📁 上传自定义背景：</p>
+              <div className="flex gap-3 items-center">
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  className="px-6 py-3 bg-gradient-to-r from-indigo-500 to-purple-500 text-white font-bold rounded-xl hover:shadow-lg transition-all"
+                >
+                  📷 选择图片
+                </button>
+                {customBg && (
+                  <div className="flex items-center gap-2">
+                    <div className="w-16 h-10 rounded-lg overflow-hidden border-2 border-white shadow">
+                      <img src={customBg} alt="自定义背景" className="w-full h-full object-cover" />
+                    </div>
+                    <span className="text-sm text-indigo-600 font-bold">已选择自定义背景</span>
+                  </div>
+                )}
+              </div>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handleCustomBgUpload}
+                className="hidden"
+              />
+            </div>
+
+            {/* 预设背景 */}
+            <div>
+              <p className="text-sm text-slate-500 mb-3">🎨 预设背景：</p>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                 {PRESET_BACKGROUNDS.map((bg) => (
                   <button
@@ -147,6 +201,11 @@ const RoomSettings: React.FC<RoomSettingsProps> = ({
                 ))}
               </div>
             </div>
+          </div>
+        )}
+
+        {/* 密码管理标签 */}
+        {activeTab === 'password' && (
           ) : (
             <div className="space-y-4">
               <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
