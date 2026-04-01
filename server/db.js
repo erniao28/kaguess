@@ -228,6 +228,21 @@ export const roomOps = {
     return exists;
   },
 
+  // 验证房间密码
+  verifyPassword: (roomId, password) => {
+    if (!db) return { exists: false, valid: false };
+    const room = roomOps.get(roomId);
+    if (!room) {
+      return { exists: false, valid: false };
+    }
+    // 如果房间没有密码，验证通过
+    if (!room.password) {
+      return { exists: true, valid: true };
+    }
+    // 验证密码
+    return { exists: true, valid: room.password === password };
+  },
+
   update: (roomId, updates) => {
     if (!db) return;
     const allowed = ['password', 'bg_image'];
@@ -313,6 +328,9 @@ export const carrotOps = {
     stmt.free();
     return 0;
   },
+
+  // 别名，兼容旧代码
+  getCount: (playerIdentifier) => carrotOps.get(playerIdentifier),
 
   upsert: (playerIdentifier, delta) => {
     if (!db) return;
