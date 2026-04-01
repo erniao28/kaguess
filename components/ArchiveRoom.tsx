@@ -152,7 +152,6 @@ const ArchiveRoom: React.FC<ArchiveRoomProps> = ({
                 )}
               </div>
               <div className="flex items-center gap-3">
-              <div>
                 {isChangingNickname ? (
                   <div className="flex items-center gap-2">
                     <input
@@ -187,16 +186,16 @@ const ArchiveRoom: React.FC<ArchiveRoomProps> = ({
                     <p className="text-indigo-100 text-sm">档案码：{playerProfile.playerCode}</p>
                   </>
                 )}
+                {!isChangingNickname && (
+                  <button
+                    onClick={() => setIsChangingNickname(true)}
+                    className="px-3 py-1 bg-white/20 hover:bg-white/30 rounded-lg text-white font-bold text-sm transition-all"
+                    title="修改昵称"
+                  >
+                    ✏️
+                  </button>
+                )}
               </div>
-              {!isChangingNickname && (
-                <button
-                  onClick={() => setIsChangingNickname(true)}
-                  className="px-3 py-1 bg-white/20 hover:bg-white/30 rounded-lg text-white font-bold text-sm transition-all"
-                  title="修改昵称"
-                >
-                  ✏️
-                </button>
-              )}
             </div>
             {/* 排行榜按钮 */}
             <button
@@ -260,7 +259,7 @@ const ArchiveRoom: React.FC<ArchiveRoomProps> = ({
                     onClick={() => setIsEditing(!isEditing)}
                     className="px-4 py-2 bg-indigo-100 hover:bg-indigo-200 rounded-xl font-bold text-indigo-600 transition-colors"
                   >
-                    {isEditing ? '💾 保存' : '✏️ 编辑')}
+                    {isEditing ? '💾 保存' : '✏️ 编辑'}
                   </button>
                 </div>
 
@@ -438,7 +437,7 @@ const ArchiveRoom: React.FC<ArchiveRoomProps> = ({
                 </div>
               </div>
 
-              {/* 可选装扮列表（示例，实际应该从背包/商店获取） */}
+              {/* 可选装扮列表 */}
               <div className="bg-white rounded-3xl p-6 shadow-lg">
                 <h3 className="text-lg font-black text-slate-700 mb-4">🎮 可选装扮（示例）</h3>
                 <div className="grid grid-cols-2 md:grid-cols-5 gap-3">

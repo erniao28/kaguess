@@ -206,50 +206,48 @@ const RoomSettings: React.FC<RoomSettingsProps> = ({
 
         {/* 密码管理标签 */}
         {activeTab === 'password' && (
-          ) : (
-            <div className="space-y-4">
-              <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
-                <p className="text-sm text-amber-800">
-                  <strong>⚠️ 注意：</strong> 设置密码后，加入房间时需要输入密码。留空则取消密码保护。
-                </p>
-              </div>
-
-              <div>
-                <label className="block text-sm font-bold text-slate-700 mb-2">
-                  新密码
-                </label>
-                <input
-                  type="password"
-                  value={newPassword}
-                  onChange={(e) => setNewPassword(e.target.value)}
-                  placeholder="输入新密码（留空取消密码）"
-                  className="w-full px-4 py-3 border-2 border-slate-200 rounded-xl focus:outline-none focus:border-indigo-500 transition-colors"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-bold text-slate-700 mb-2">
-                  确认密码
-                </label>
-                <input
-                  type="password"
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  placeholder="再次输入密码"
-                  className="w-full px-4 py-3 border-2 border-slate-200 rounded-xl focus:outline-none focus:border-indigo-500 transition-colors"
-                />
-              </div>
-
-              <button
-                onClick={handlePasswordUpdate}
-                disabled={!newPassword}
-                className="w-full py-4 bg-gradient-to-r from-indigo-500 to-purple-500 text-white font-black rounded-xl hover:shadow-lg hover:scale-[1.02] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                🔐 更新密码
-              </button>
+          <div className="space-y-4">
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
+              <p className="text-sm text-amber-800">
+                <strong>⚠️ 注意：</strong> 设置密码后，加入房间时需要输入密码。留空则取消密码保护。
+              </p>
             </div>
-          )}
-        </div>
+
+            <div>
+              <label className="block text-sm font-bold text-slate-700 mb-2">
+                新密码
+              </label>
+              <input
+                type="password"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                placeholder="输入新密码（留空取消密码）"
+                className="w-full px-4 py-3 border-2 border-slate-200 rounded-xl focus:outline-none focus:border-indigo-500 transition-colors"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-bold text-slate-700 mb-2">
+                确认密码
+              </label>
+              <input
+                type="password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                placeholder="再次输入密码"
+                className="w-full px-4 py-3 border-2 border-slate-200 rounded-xl focus:outline-none focus:border-indigo-500 transition-colors"
+              />
+            </div>
+
+            <button
+              onClick={handlePasswordUpdate}
+              disabled={!newPassword}
+              className="w-full py-4 bg-gradient-to-r from-indigo-500 to-purple-500 text-white font-black rounded-xl hover:shadow-lg hover:scale-[1.02] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              🔐 更新密码
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
