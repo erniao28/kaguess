@@ -381,6 +381,9 @@ export const effectOps = {
     return effects;
   },
 
+  // 获取玩家已解锁的特效（别名）
+  getUnlocked: (playerIdentifier) => effectOps.getPlayerEffects(playerIdentifier),
+
   addEffect: (playerIdentifier, effectId) => {
     if (!db) return;
     const stmt = db.prepare('INSERT OR IGNORE INTO player_effects (player_identifier, effect_id) VALUES (?, ?)');
