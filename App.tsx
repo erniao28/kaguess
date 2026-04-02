@@ -902,9 +902,7 @@ const App: React.FC = () => {
               <ScoreBoard player={players[0]} onUpdateScore={handleUpdateScore} />
             </div>
             <div className="lg:col-span-6 order-1 lg:order-2 space-y-6">
-              {/* 禁语字卡片 */}
-              <ForbiddenWordCard word={sessionWord} />
-              {/* 聊天框 - 放在禁语字下方，居中显示 */}
+              {/* 聊天框 - 放在尼克和朱迪之间 */}
               <div className="max-w-xl mx-auto">
                 <ChatBox
                   messages={chatMessages}
@@ -918,6 +916,8 @@ const App: React.FC = () => {
                   onBgChange={setChatBgImage}
                 />
               </div>
+              {/* 禁语字卡片 - 放在下方 */}
+              <ForbiddenWordCard word={sessionWord} />
             </div>
             <div className="lg:col-span-3 lg:sticky lg:top-8 order-3">
               <ScoreBoard player={players[1]} onUpdateScore={handleUpdateScore} />
