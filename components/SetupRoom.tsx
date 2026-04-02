@@ -39,6 +39,13 @@ const SetupRoom: React.FC<Props> = ({ onCreate, onJoin, onOpenPrivateRoom }) => 
           连接作战频道
         </button>
 
+        <button
+          onClick={onOpenPrivateRoom}
+          className="w-full py-6 rounded-[30px] bg-gradient-to-r from-pink-500 to-rose-500 text-white font-black text-2xl hover:from-pink-600 hover:to-rose-600 transition-all shadow-xl active:scale-95 flex items-center justify-center gap-2"
+        >
+          🔐 私密房间
+        </button>
+
         <div className="relative py-4">
           <div className="absolute inset-0 flex items-center">
             <div className="w-full border-t border-slate-200"></div>
@@ -53,13 +60,6 @@ const SetupRoom: React.FC<Props> = ({ onCreate, onJoin, onOpenPrivateRoom }) => 
           className="w-full py-6 rounded-[30px] bg-indigo-600 text-white font-black text-2xl hover:bg-indigo-700 transition-all shadow-xl active:scale-95"
         >
           创建快速房间
-        </button>
-
-        <button
-          onClick={onOpenPrivateRoom}
-          className="w-full py-6 rounded-[30px] bg-gradient-to-r from-pink-500 to-rose-500 text-white font-black text-2xl hover:from-pink-600 hover:to-rose-600 transition-all shadow-xl active:scale-95 flex items-center justify-center gap-2"
-        >
-          🔐 私密房间
         </button>
       </div>
 

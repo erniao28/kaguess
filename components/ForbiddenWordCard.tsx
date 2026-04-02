@@ -10,7 +10,7 @@ interface Props {
 const ForbiddenWordCard: React.FC<Props> = ({ word }) => {
   const [insight, setInsight] = useState<string>('正在向奥塔维亚寻求智慧...');
   const [loading, setLoading] = useState(true);
-  const [isRevealed, setIsRevealed] = useState(false);
+  const [isHolding, setIsHolding] = useState(false);
 
   useEffect(() => {
     const fetchInsight = async () => {
@@ -38,24 +38,28 @@ const ForbiddenWordCard: React.FC<Props> = ({ word }) => {
 
         {/* 禁语字 - 带遮罩特效 */}
         <div className="relative inline-block">
-          <h1 className={`text-[12rem] font-black bg-gradient-to-b from-slate-900 via-indigo-950 to-indigo-800 bg-clip-text text-transparent mb-6 drop-shadow-2xl select-none leading-none animate-in fade-in zoom-in duration-1000 ${!isRevealed ? 'blur-sm scale-90' : ''}`}>
+          <h1 className={`text-[12rem] font-black bg-gradient-to-b from-slate-900 via-indigo-950 to-indigo-800 bg-clip-text text-transparent mb-6 drop-shadow-2xl select-none leading-none animate-in fade-in zoom-in duration-1000 ${isHolding ? 'blur-none scale-100' : 'blur-sm scale-90'}`}>
             {word.char}
           </h1>
 
-          {/* 神秘遮罩 - 点击后消失 */}
-          {!isRevealed && (
+          {/* 神秘遮罩 - 按住显示，松开恢复遮挡 */}
+          {!isHolding && (
             <div
-              className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-indigo-600/90 via-purple-600/90 to-pink-600/90 rounded-3xl cursor-pointer transition-all duration-500 hover:scale-105 hover:from-indigo-500 hover:via-purple-500 hover:to-pink-500"
-              onClick={() => setIsRevealed(true)}
+              className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-indigo-600/90 via-purple-600/90 to-pink-600/90 rounded-3xl cursor-pointer transition-all duration-300 hover:scale-105 hover:from-indigo-500 hover:via-purple-500 hover:to-pink-500 select-none"
+              onMouseDown={() => setIsHolding(true)}
+              onMouseUp={() => setIsHolding(false)}
+              onMouseLeave={() => setIsHolding(false)}
+              onTouchStart={() => setIsHolding(true)}
+              onTouchEnd={() => setIsHolding(false)}
             >
-              <div className="text-center">
+              <div className="text-center pointer-events-none">
                 <div className="text-6xl mb-2 animate-pulse">🔮</div>
-                <div className="text-white font-black text-xl tracking-widest">点击揭示禁语</div>
-                <div className="text-indigo-200 text-sm mt-1">言灵之力已被封印</div>
+                <div className="text-white font-black text-xl tracking-widest">长按揭示禁语</div>
+                <div className="text-indigo-200 text-sm mt-1">松开即密封</div>
               </div>
 
               {/* 闪光粒子效果 */}
-              <div className="absolute inset-0 overflow-hidden rounded-3xl">
+              <div className="absolute inset-0 overflow-hidden rounded-3xl pointer-events-none">
                 {[...Array(6)].map((_, i) => (
                   <div
                     key={i}

@@ -56,8 +56,12 @@ const PlayerProfileModal: React.FC<PlayerProfileModalProps> = ({
     socket.on('player_profile_result', (result: { success: boolean; error?: string; playerCode?: string }) => {
       setLoading(false);
       if (result.success) {
-        // 创建成功后自动登录
-        handleLogin(result.playerCode!, password);
+        // 创建成功后自动登录 - 使用当前密码值
+        console.log('[PROFILE] 创建成功，准备自动登录:', result.playerCode);
+        socket.emit('login_player', {
+          playerCode: result.playerCode,
+          password
+        });
       } else {
         setError(result.error || '创建失败');
       }

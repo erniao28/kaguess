@@ -45,16 +45,40 @@ const HOBBY_OPTIONS = [
 ];
 
 const CLOTHING_ITEMS = [
+  // 衣服类
   { id: 'shirt_casual', name: '休闲 T 恤', icon: '👕', type: 'clothes' },
   { id: 'shirt_formal', name: '正装衬衫', icon: '👔', type: 'clothes' },
   { id: 'jacket', name: '外套夹克', icon: '🧥', type: 'clothes' },
+  { id: 'hoodie', name: '连帽卫衣', icon: '👚', type: 'clothes' },
+  { id: 'vest', name: '背心马甲', icon: '🦺', type: 'clothes' },
+  { id: 'dress', name: '优雅礼服', icon: '👘', type: 'clothes' },
+
+  // 头饰类
   { id: 'hat_cap', name: '棒球帽', icon: '🧢', type: 'headwear' },
   { id: 'hat_crown', name: '皇冠', icon: '👑', type: 'headwear' },
+  { id: 'hat_top', name: '高顶礼帽', icon: '🎩', type: 'headwear' },
+  { id: 'hat_cowboy', name: '牛仔帽', icon: '🤠', type: 'headwear' },
+  { id: 'hat_beret', name: '贝雷帽', icon: '🎨', type: 'headwear' },
+  { id: 'hair_band', name: '发带', icon: '🎀', type: 'headwear' },
+  { id: 'halo', name: '天使光环', icon: '😇', type: 'headwear' },
+
+  // 装饰类
   { id: 'glasses', name: '眼镜', icon: '👓', type: 'accessory' },
   { id: 'sunglasses', name: '墨镜', icon: '🕶️', type: 'accessory' },
   { id: 'backpack', name: '背包', icon: '🎒', type: 'accessory' },
+  { id: 'handbag', name: '手提包', icon: '👜', type: 'accessory' },
+  { id: 'purse', name: '钱包', icon: '👛', type: 'accessory' },
+  { id: 'scarf', name: '围巾', icon: '🧣', type: 'accessory' },
+  { id: 'tie', name: '领带', icon: '👔', type: 'accessory' },
+  { id: 'necklace', name: '项链', icon: '💎', type: 'accessory' },
+  { id: 'watch', name: '手表', icon: '⌚', type: 'accessory' },
+
+  // 鞋子类
   { id: 'shoes_sneakers', name: '运动鞋', icon: '👟', type: 'shoes' },
   { id: 'shoes_boots', name: '靴子', icon: '🥾', type: 'shoes' },
+  { id: 'shoes_formal', name: '皮鞋', icon: '👞', type: 'shoes' },
+  { id: 'shoes_heels', name: '高跟鞋', icon: '👠', type: 'shoes' },
+  { id: 'shoes_sandals', name: '凉鞋', icon: '👡', type: 'shoes' },
 ];
 
 const ArchiveRoom: React.FC<ArchiveRoomProps> = ({
@@ -439,23 +463,96 @@ const ArchiveRoom: React.FC<ArchiveRoomProps> = ({
 
               {/* 可选装扮列表 */}
               <div className="bg-white rounded-3xl p-6 shadow-lg">
-                <h3 className="text-lg font-black text-slate-700 mb-4">🎮 可选装扮（示例）</h3>
-                <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-                  {CLOTHING_ITEMS.map((item) => (
-                    <button
-                      key={item.id}
-                      onClick={() => handleEquipItem(item.id, item.type)}
-                      className="p-4 bg-slate-50 hover:bg-indigo-50 rounded-xl transition-colors text-center"
-                    >
-                      <div className="text-4xl mb-1">{item.icon}</div>
-                      <div className="text-xs font-bold text-slate-600">{item.name}</div>
-                    </button>
-                  ))}
+                <h3 className="text-lg font-black text-slate-700 mb-4">🎮 可选装扮</h3>
+
+                {/* 衣服类 */}
+                <div className="mb-6">
+                  <h4 className="text-sm font-bold text-slate-500 mb-3">👕 上装</h4>
+                  <div className="grid grid-cols-3 md:grid-cols-6 gap-3">
+                    {CLOTHING_ITEMS.filter(i => i.type === 'clothes').map((item) => (
+                      <button
+                        key={item.id}
+                        onClick={() => handleEquipItem(item.id, item.type)}
+                        className={`p-3 rounded-xl transition-all text-center ${
+                          playerProfile.equippedClothesId === item.id
+                            ? 'bg-indigo-100 border-2 border-indigo-500'
+                            : 'bg-slate-50 hover:bg-indigo-50'
+                        }`}
+                      >
+                        <div className="text-3xl mb-1">{item.icon}</div>
+                        <div className="text-xs font-bold text-slate-600 truncate">{item.name}</div>
+                      </button>
+                    ))}
+                  </div>
                 </div>
-                <p className="text-xs text-slate-400 mt-4">
-                  💡 装扮可通过胡萝卜购买或成就解锁获得
-                </p>
+
+                {/* 头饰类 */}
+                <div className="mb-6">
+                  <h4 className="text-sm font-bold text-slate-500 mb-3">🎩 头饰</h4>
+                  <div className="grid grid-cols-3 md:grid-cols-6 gap-3">
+                    {CLOTHING_ITEMS.filter(i => i.type === 'headwear').map((item) => (
+                      <button
+                        key={item.id}
+                        onClick={() => handleEquipItem(item.id, item.type)}
+                        className={`p-3 rounded-xl transition-all text-center ${
+                          playerProfile.equippedHeadwearId === item.id
+                            ? 'bg-indigo-100 border-2 border-indigo-500'
+                            : 'bg-slate-50 hover:bg-indigo-50'
+                        }`}
+                      >
+                        <div className="text-3xl mb-1">{item.icon}</div>
+                        <div className="text-xs font-bold text-slate-600 truncate">{item.name}</div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* 装饰类 */}
+                <div className="mb-6">
+                  <h4 className="text-sm font-bold text-slate-500 mb-3">🎒 装饰品</h4>
+                  <div className="grid grid-cols-3 md:grid-cols-6 gap-3">
+                    {CLOTHING_ITEMS.filter(i => i.type === 'accessory').map((item) => (
+                      <button
+                        key={item.id}
+                        onClick={() => handleEquipItem(item.id, item.type)}
+                        className={`p-3 rounded-xl transition-all text-center ${
+                          playerProfile.equippedAccessoryId === item.id
+                            ? 'bg-indigo-100 border-2 border-indigo-500'
+                            : 'bg-slate-50 hover:bg-indigo-50'
+                        }`}
+                      >
+                        <div className="text-3xl mb-1">{item.icon}</div>
+                        <div className="text-xs font-bold text-slate-600 truncate">{item.name}</div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* 鞋子类 */}
+                <div>
+                  <h4 className="text-sm font-bold text-slate-500 mb-3">👟 鞋子</h4>
+                  <div className="grid grid-cols-3 md:grid-cols-6 gap-3">
+                    {CLOTHING_ITEMS.filter(i => i.type === 'shoes').map((item) => (
+                      <button
+                        key={item.id}
+                        onClick={() => handleEquipItem(item.id, item.type)}
+                        className={`p-3 rounded-xl transition-all text-center ${
+                          playerProfile.equippedShoesId === item.id
+                            ? 'bg-indigo-100 border-2 border-indigo-500'
+                            : 'bg-slate-50 hover:bg-indigo-50'
+                        }`}
+                      >
+                        <div className="text-3xl mb-1">{item.icon}</div>
+                        <div className="text-xs font-bold text-slate-600 truncate">{item.name}</div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
               </div>
+
+              <p className="text-xs text-slate-400 text-center">
+                💡 装扮可通过胡萝卜购买或成就解锁获得
+              </p>
             </div>
           )}
 
