@@ -442,10 +442,10 @@ export const playerOps = {
   create: (playerCode, passwordHash, nickname = '玩家') => {
     if (!db) return;
     const stmt = db.prepare(`
-      INSERT INTO player_profiles (player_code, password_hash, nickname, last_login)
-      VALUES (?, ?, ?, strftime('%s', 'now'))
+      INSERT INTO player_profiles (player_identifier, player_code, password_hash, nickname, last_login)
+      VALUES (?, ?, ?, ?, strftime('%s', 'now'))
     `);
-    stmt.run([playerCode, passwordHash, nickname]);
+    stmt.run([playerCode, playerCode, passwordHash, nickname]);
     saveDatabase();
   },
 
@@ -528,6 +528,26 @@ export const playerOps = {
     stmt.run([newNickname, playerCode]);
     saveDatabase();
     return { success: true };
+  },
+
+  // 获取排行榜（按胡萝卜数量排序）
+  getLeaderboard: (limit = 10, orderBy = 'carrot_count') => {
+    if (!db) return [];
+    const allowedOrders = ['carrot_count', 'total_games', 'win_games'];
+    const orderCol = allowedOrders.includes(orderBy) ? orderBy : 'carrot_count';
+    const stmt = db.prepare(`
+      SELECT player_code, nickname, carrot_count, total_games, win_games, vip_level, created_at, last_login
+      FROM player_profiles
+      ORDER BY ${orderCol} DESC
+      LIMIT ?
+    `);
+    stmt.bind([limit]);
+    const players = [];
+    while (stmt.step()) {
+      players.push(stmt.getAsObject());
+    }
+    stmt.free();
+    return players;
   },
 };
 
