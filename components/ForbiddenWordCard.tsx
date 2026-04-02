@@ -10,6 +10,7 @@ interface Props {
 const ForbiddenWordCard: React.FC<Props> = ({ word }) => {
   const [insight, setInsight] = useState<string>('正在向奥塔维亚寻求智慧...');
   const [loading, setLoading] = useState(true);
+  const [isRevealed, setIsRevealed] = useState(false);
 
   useEffect(() => {
     const fetchInsight = async () => {
@@ -35,9 +36,42 @@ const ForbiddenWordCard: React.FC<Props> = ({ word }) => {
            <div className="h-[1px] flex-1 bg-gradient-to-l from-transparent to-slate-200" />
         </div>
 
-        <h1 className="text-[12rem] font-black bg-gradient-to-b from-slate-900 via-indigo-950 to-indigo-800 bg-clip-text text-transparent mb-6 drop-shadow-2xl select-none leading-none animate-in fade-in zoom-in duration-1000">
-          {word.char}
-        </h1>
+        {/* 禁语字 - 带遮罩特效 */}
+        <div className="relative inline-block">
+          <h1 className={`text-[12rem] font-black bg-gradient-to-b from-slate-900 via-indigo-950 to-indigo-800 bg-clip-text text-transparent mb-6 drop-shadow-2xl select-none leading-none animate-in fade-in zoom-in duration-1000 ${!isRevealed ? 'blur-sm scale-90' : ''}`}>
+            {word.char}
+          </h1>
+
+          {/* 神秘遮罩 - 点击后消失 */}
+          {!isRevealed && (
+            <div
+              className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-indigo-600/90 via-purple-600/90 to-pink-600/90 rounded-3xl cursor-pointer transition-all duration-500 hover:scale-105 hover:from-indigo-500 hover:via-purple-500 hover:to-pink-500"
+              onClick={() => setIsRevealed(true)}
+            >
+              <div className="text-center">
+                <div className="text-6xl mb-2 animate-pulse">🔮</div>
+                <div className="text-white font-black text-xl tracking-widest">点击揭示禁语</div>
+                <div className="text-indigo-200 text-sm mt-1">言灵之力已被封印</div>
+              </div>
+
+              {/* 闪光粒子效果 */}
+              <div className="absolute inset-0 overflow-hidden rounded-3xl">
+                {[...Array(6)].map((_, i) => (
+                  <div
+                    key={i}
+                    className="absolute w-1 h-1 bg-white rounded-full animate-ping"
+                    style={{
+                      left: `${20 + i * 15}%`,
+                      top: `${30 + (i % 3) * 25}%`,
+                      animationDelay: `${i * 0.3}s`,
+                      animationDuration: '2s'
+                    }}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
 
         <div className="flex justify-center gap-4 mb-10">
           <div className="px-6 py-2 bg-rose-50 rounded-2xl border border-rose-100 shadow-sm">
@@ -54,11 +88,11 @@ const ForbiddenWordCard: React.FC<Props> = ({ word }) => {
           {/* Animated Glows */}
           <div className="absolute -top-32 -right-32 w-64 h-64 bg-indigo-500 rounded-full blur-[100px] opacity-20 animate-pulse" />
           <div className="absolute -bottom-32 -left-32 w-64 h-64 bg-orange-500 rounded-full blur-[100px] opacity-10 animate-pulse [animation-delay:1.5s]" />
-          
+
           <h3 className="text-indigo-400 font-black mb-6 flex items-center gap-3 text-sm tracking-[0.2em] uppercase">
             <span className="text-2xl filter drop-shadow-[0_0_8px_rgba(129,140,248,0.5)]">🦊🐰</span> 绝密行动指令
           </h3>
-          
+
           <div className="text-indigo-50/90 text-sm leading-relaxed min-h-[120px] font-medium transition-all group-hover/insight:text-white">
             {loading ? (
               <div className="flex gap-2 items-center h-full justify-center">
@@ -70,7 +104,7 @@ const ForbiddenWordCard: React.FC<Props> = ({ word }) => {
               <div className="whitespace-pre-wrap">{insight}</div>
             )}
           </div>
-          
+
           {/* Decorative Corner */}
           <div className="absolute top-0 right-0 p-3 opacity-20">
             <div className="border-t-2 border-r-2 border-indigo-400 w-8 h-8 rounded-tr-xl" />

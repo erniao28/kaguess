@@ -817,7 +817,7 @@ io.on('connection', (socket) => {
 
   // 断开连接
   socket.on('disconnect', () => {
-    const { roomId, role } = socket.data;
+    const { roomId, role, isPrivate } = socket.data;
     if (roomId) {
       const room = rooms.get(roomId);
       if (room) {
@@ -828,11 +828,25 @@ io.on('connection', (socket) => {
         // 通知房间内其他玩家
         socket.to(roomId).emit('player_left', { role });
 
-        // 如果房间空了，删除房间
-        if (!room.state.fox && !room.state.bunny) {
-          rooms.delete(roomId);
-          console.log(`房间 ${roomId} 已删除`);
+        // 私密房间不删除，保留在内存中供下次登录
+        // 普通房间在空了才删除
+        if (!isPrivate) {
+          // 如果房间空了，删除房间
+          if (!room.state.fox && !room.state.bunny) {
+            rooms.delete(roomId);
+            console.log(`普通房间 ${roomId} 已删除`);
+          } else {
+            // 同步剩余玩家状态
+            io.to(roomId).emit('sync_room', {
+              fox: room.state.fox ? { ...room.state.fox.player, socketId: room.state.fox.socketId } : null,
+              bunny: room.state.bunny ? { ...room.state.bunny.player, socketId: room.state.bunny.socketId } : null,
+              foxReady: room.state.fox?.isReady,
+              bunnyReady: room.state.bunny?.isReady
+            });
+          }
         } else {
+          // 私密房间：即使空了也保留，但需要同步状态（可能还有另一个玩家在）
+          console.log(`私密房间 ${roomId} 保留中...`);
           // 同步剩余玩家状态
           io.to(roomId).emit('sync_room', {
             fox: room.state.fox ? { ...room.state.fox.player, socketId: room.state.fox.socketId } : null,

@@ -503,7 +503,7 @@ const App: React.FC = () => {
   };
 
   const handleSendMessage = (content: string, type: 'text' | 'emoji' | 'image') => {
-    if (!socket || !roomId || !socket.connected) return;
+    if (!socket || !roomId) return;
 
     const player = players.find(p => p.type === playerRole);
     const message: ChatMessage = {
@@ -516,7 +516,12 @@ const App: React.FC = () => {
       timestamp: Date.now()
     };
 
-    // 发送到服务器（不本地添加，等服务器广播回来）
+    console.log('[CHAT] 发送消息:', message);
+
+    // 先本地添加消息（立即显示）
+    setChatMessages(prev => [...prev, message]);
+
+    // 发送到服务器
     socket.emit('chat_message', { roomId, message });
   };
 
@@ -870,7 +875,7 @@ const App: React.FC = () => {
       )}
 
       {gameState === GameState.PLAYING && (
-        <div className="w-full max-w-6xl space-y-8 z-10 animate-in zoom-in-95 duration-500">
+        <div className="w-full max-w-6xl space-y-6 z-10 animate-in zoom-in-95 duration-500">
           {/* 得分条 */}
           <div className="bg-white rounded-[50px] p-3 shadow-2xl border-4 border-slate-50 flex items-center relative h-28 overflow-hidden">
             <div
@@ -891,28 +896,28 @@ const App: React.FC = () => {
             </div>
           </div>
 
-          {/* 聊天框 - 移到中间位置 */}
-          <div className="max-w-2xl mx-auto">
-            <ChatBox
-              messages={chatMessages}
-              onSendMessage={handleSendMessage}
-              isConnected={!!socket?.connected && !!roomId}
-              mySocketId={mySocketId}
-              onClearHistory={isPrivateRoom ? handleClearChatHistory : undefined}
-              chatFontSize={chatFontSize}
-              chatBgImage={chatBgImage}
-              onFontChange={setChatFontSize}
-              onBgChange={setChatBgImage}
-            />
-          </div>
-
           {/* 分数板和禁语字 */}
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
             <div className="lg:col-span-3 lg:sticky lg:top-8 order-2 lg:order-1">
               <ScoreBoard player={players[0]} onUpdateScore={handleUpdateScore} />
             </div>
-            <div className="lg:col-span-6 order-1 lg:order-2">
+            <div className="lg:col-span-6 order-1 lg:order-2 space-y-6">
+              {/* 禁语字卡片 */}
               <ForbiddenWordCard word={sessionWord} />
+              {/* 聊天框 - 放在禁语字下方，居中显示 */}
+              <div className="max-w-xl mx-auto">
+                <ChatBox
+                  messages={chatMessages}
+                  onSendMessage={handleSendMessage}
+                  isConnected={!!socket?.connected && !!roomId}
+                  mySocketId={mySocketId}
+                  onClearHistory={isPrivateRoom ? handleClearChatHistory : undefined}
+                  chatFontSize={chatFontSize}
+                  chatBgImage={chatBgImage}
+                  onFontChange={setChatFontSize}
+                  onBgChange={setChatBgImage}
+                />
+              </div>
             </div>
             <div className="lg:col-span-3 lg:sticky lg:top-8 order-3">
               <ScoreBoard player={players[1]} onUpdateScore={handleUpdateScore} />

@@ -186,7 +186,7 @@ const ChatBox: React.FC<ChatBoxProps> = ({
 
   return (
     <div
-      className={`rounded-[20px] shadow-xl border-4 border-slate-100 overflow-hidden flex flex-col h-[400px] transition-colors ${
+      className={`rounded-[24px] shadow-xl border-4 border-slate-100 overflow-hidden flex flex-col h-[360px] transition-colors ${
         isDragging ? 'ring-4 ring-indigo-400 ring-dashed scale-[1.02]' : ''
       }`}
       style={{
@@ -200,12 +200,12 @@ const ChatBox: React.FC<ChatBoxProps> = ({
       onDrop={handleDrop}
     >
       {/* 聊天标题 */}
-      <div className="bg-gradient-to-r from-indigo-500 to-purple-500 px-4 py-3 flex items-center justify-between relative z-10">
-        <h3 className="text-white font-bold text-lg flex items-center gap-2">
+      <div className="bg-gradient-to-r from-indigo-500 to-purple-500 px-4 py-2.5 flex items-center justify-between relative z-10">
+        <h3 className="text-white font-bold text-base flex items-center gap-2">
           💬 聊天室
           {isConnected && <span className="w-2 h-2 bg-green-400 rounded-full animate-pulse" />}
         </h3>
-        <div className="flex gap-2">
+        <div className="flex gap-1.5">
           {onClearHistory && (
             <button
               onClick={onClearHistory}
@@ -217,28 +217,28 @@ const ChatBox: React.FC<ChatBoxProps> = ({
           )}
           <button
             onClick={() => setShowFontPicker(!showFontPicker)}
-            className="text-white hover:bg-white/20 rounded-full p-2 transition-colors"
+            className="text-white hover:bg-white/20 rounded-full p-2 transition-colors text-sm"
             title="字体大小"
           >
             🔤
           </button>
           <button
             onClick={() => setShowBgPicker(!showBgPicker)}
-            className="text-white hover:bg-white/20 rounded-full p-2 transition-colors"
+            className="text-white hover:bg-white/20 rounded-full p-2 transition-colors text-sm"
             title="聊天背景"
           >
             🖼️
           </button>
           <button
             onClick={() => setShowEmojiPicker(!showEmojiPicker)}
-            className="text-white hover:bg-white/20 rounded-full p-2 transition-colors"
+            className="text-white hover:bg-white/20 rounded-full p-2 transition-colors text-sm"
             title="表情"
           >
             😀
           </button>
           <button
             onClick={() => fileInputRef.current?.click()}
-            className="text-white hover:bg-white/20 rounded-full p-2 transition-colors"
+            className="text-white hover:bg-white/20 rounded-full p-2 transition-colors text-sm"
             title="发送图片"
           >
             📷
@@ -419,7 +419,7 @@ const ChatBox: React.FC<ChatBoxProps> = ({
       )}
 
       {/* 输入区域 */}
-      <div className="border-t border-slate-200 p-3 bg-white">
+      <div className="border-t border-slate-200 p-2.5 bg-white">
         <div className="flex items-center gap-2">
           <input
             type="text"
@@ -428,12 +428,12 @@ const ChatBox: React.FC<ChatBoxProps> = ({
             onKeyPress={handleKeyPress}
             placeholder={isConnected ? "输入消息..." : "未连接"}
             disabled={!isConnected}
-            className="flex-1 px-4 py-2 border-2 border-slate-200 rounded-full focus:outline-none focus:border-indigo-500 transition-colors"
+            className="flex-1 px-4 py-2 border-2 border-slate-200 rounded-full focus:outline-none focus:border-indigo-500 transition-colors text-sm"
           />
           <button
             onClick={handleSend}
             disabled={!inputValue.trim() || !isConnected}
-            className="px-6 py-2 bg-gradient-to-r from-indigo-500 to-purple-500 text-white rounded-full font-bold hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+            className="px-5 py-2 bg-gradient-to-r from-indigo-500 to-purple-500 text-white rounded-full font-bold hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed transition-all text-sm"
           >
             发送
           </button>

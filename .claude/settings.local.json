@@ -24,7 +24,27 @@
       "Bash(grep -o 'name:\"\"\"\"尼克\"\"\"\"' dist/assets/*.js)",
       "Bash(tar:*)",
       "Bash(rm -f deploy.tar.gz)",
-      "Bash(gzip deploy.tar)"
+      "Bash(gzip deploy.tar)",
+      "Bash(node migrate-db.js)",
+      "Bash(npm rebuild:*)",
+      "Bash(npx prebuild-install:*)",
+      "Bash(npm uninstall:*)",
+      "Bash(taskkill /F /IM node.exe)",
+      "Bash(taskkill /IM node.exe)",
+      "Bash(taskkill //IM node.exe)",
+      "Bash(powershell -Command \"Stop-Process -Name node -Force\")",
+      "Bash(powershell -Command \"Get-Process node -ErrorAction SilentlyContinue | Stop-Process -Force; Start-Sleep -Seconds 2; Get-Process node -ErrorAction SilentlyContinue\")",
+      "Bash(Get-Process node:*)",
+      "Bash(Stop-Process -Force)",
+      "Bash(node -e \"console.log\\(process.version\\)\")",
+      "Bash(node-gyp rebuild:*)",
+      "Bash(rm:*)",
+      "Bash(taskkill /F /PID 69328)",
+      "Bash(taskkill /PID 69328)",
+      "Bash(powershell -Command \"Stop-Process -Id 69328 -Force\")",
+      "Bash(powershell:*)",
+      "Bash(dir /b /o-d rooms.db*)",
+      "Bash(certutil:*)"
     ]
   }
 }

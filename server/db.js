@@ -283,6 +283,18 @@ export const messageOps = {
     stmt.free();
     return messages;
   },
+
+  getHistory: (roomId, limit = 100) => {
+    if (!db) return [];
+    const stmt = db.prepare('SELECT * FROM messages WHERE room_id = ? ORDER BY timestamp ASC LIMIT ?');
+    stmt.bind([roomId, limit]);
+    const messages = [];
+    while (stmt.step()) {
+      messages.push(stmt.getAsObject());
+    }
+    stmt.free();
+    return messages;
+  },
 };
 
 // 背景操作

@@ -213,28 +213,28 @@ const PlayerProfileModal: React.FC<PlayerProfileModalProps> = ({
             </div>
           )}
 
-          {mode === 'create' && (
-            <>
-              {/* 档案码 */}
-              <div>
-                <label className="block text-sm font-bold text-slate-700 mb-2">
-                  档案码（6-8 位字母或数字）
-                </label>
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    value={playerCode}
-                    onChange={(e) => setPlayerCode(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ''))}
-                    className={`flex-1 px-4 py-3 border-2 rounded-xl focus:outline-none focus:ring-2 font-mono text-lg tracking-wider ${
-                      codeAvailable === false
-                        ? 'border-rose-300 focus:border-rose-500 focus:ring-rose-200'
-                        : codeAvailable === true
-                        ? 'border-green-300 focus:border-green-500 focus:ring-green-200'
-                        : 'border-slate-200 focus:border-indigo-500 focus:ring-indigo-200'
-                    }`}
-                    maxLength={8}
-                    placeholder="ABC123"
-                  />
+          {/* 档案码输入（创建和登录模式都需要） */}
+          <div>
+            <label className="block text-sm font-bold text-slate-700 mb-2">
+              档案码（6-8 位字母或数字）
+            </label>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={playerCode}
+                onChange={(e) => setPlayerCode(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ''))}
+                className={`flex-1 px-4 py-3 border-2 rounded-xl focus:outline-none focus:ring-2 font-mono text-lg tracking-wider ${
+                  mode === 'create' && codeAvailable === false
+                    ? 'border-rose-300 focus:border-rose-500 focus:ring-rose-200'
+                    : mode === 'create' && codeAvailable === true
+                    ? 'border-green-300 focus:border-green-500 focus:ring-green-200'
+                    : 'border-slate-200 focus:border-indigo-500 focus:ring-indigo-200'
+                }`}
+                maxLength={8}
+                placeholder="ABC123"
+              />
+              {mode === 'create' && (
+                <>
                   <button
                     onClick={handleCopyCode}
                     className="px-4 py-3 bg-slate-100 hover:bg-slate-200 rounded-xl font-bold text-slate-600 transition-colors"
@@ -253,15 +253,19 @@ const PlayerProfileModal: React.FC<PlayerProfileModalProps> = ({
                   >
                     🔄
                   </button>
-                </div>
-                {codeAvailable === true && (
-                  <p className="text-green-600 text-sm mt-1">✅ 档案码可用</p>
-                )}
-                {codeAvailable === false && playerCode.length >= 6 && (
-                  <p className="text-rose-600 text-sm mt-1">❌ 档案码已被占用</p>
-                )}
-              </div>
+                </>
+              )}
+            </div>
+            {mode === 'create' && codeAvailable === true && (
+              <p className="text-green-600 text-sm mt-1">✅ 档案码可用</p>
+            )}
+            {mode === 'create' && codeAvailable === false && playerCode.length >= 6 && (
+              <p className="text-rose-600 text-sm mt-1">❌ 档案码已被占用</p>
+            )}
+          </div>
 
+          {mode === 'create' && (
+            <>
               {/* 昵称 */}
               <div>
                 <label className="block text-sm font-bold text-slate-700 mb-2">
