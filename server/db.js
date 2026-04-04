@@ -43,6 +43,7 @@ async function initDatabase() {
       sender_role TEXT,
       content TEXT NOT NULL,
       type TEXT DEFAULT 'text',
+      quote TEXT,
       timestamp INTEGER DEFAULT (strftime('%s', 'now') * 1000),
       FOREIGN KEY (room_id) REFERENCES rooms(id) ON DELETE CASCADE
     );
@@ -265,10 +266,21 @@ export const roomOps = {
 
 // 消息操作
 export const messageOps = {
-  add: (roomId, senderId, senderName, senderRole, content, type = 'text') => {
+  add: (roomId, senderId, senderName, senderRole, content, type = 'text', quote = null) => {
     if (!db) return;
-    const stmt = db.prepare('INSERT INTO messages (room_id, sender_id, sender_name, sender_role, content, type) VALUES (?, ?, ?, ?, ?, ?)');
-    stmt.run([roomId, senderId, senderName, senderRole, content, type]);
+
+    // 如果有引用对象，序列化为 JSON 字符串存储
+    let quoteJson = null;
+    if (quote && typeof quote === 'object') {
+      try {
+        quoteJson = JSON.stringify(quote);
+      } catch (e) {
+        console.error('[MESSAGE] 序列化引用失败:', e);
+      }
+    }
+
+    const stmt = db.prepare('INSERT INTO messages (room_id, sender_id, sender_name, sender_role, content, type, quote) VALUES (?, ?, ?, ?, ?, ?, ?)');
+    stmt.run([roomId, senderId, senderName, senderRole, content, type, quoteJson]);
     saveDatabase();
   },
 

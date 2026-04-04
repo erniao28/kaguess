@@ -278,7 +278,7 @@ io.on('connection', (socket) => {
     // 保存到数据库（仅私密房间，普通房间跳过）
     if (room.isPrivate) {
       try {
-        messageOps.add(roomId, message);
+        messageOps.add(roomId, message.senderId, message.senderName, message.senderRole, message.content, message.type, message.quote);
       } catch (err) {
         console.error('[CHAT_MESSAGE] 保存失败:', err);
       }
