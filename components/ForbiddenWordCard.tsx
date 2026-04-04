@@ -43,15 +43,16 @@ const ForbiddenWordCard: React.FC<Props> = ({ word }) => {
           </h1>
 
           {/* 神秘遮罩 - 按住显示，松开恢复遮挡 */}
-          {!isHolding && (
-            <div
-              className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-indigo-600/90 via-purple-600/90 to-pink-600/90 rounded-3xl cursor-pointer transition-all duration-300 hover:scale-105 hover:from-indigo-500 hover:via-purple-500 hover:to-pink-500 select-none"
-              onMouseDown={() => setIsHolding(true)}
-              onMouseUp={() => setIsHolding(false)}
-              onMouseLeave={() => setIsHolding(false)}
-              onTouchStart={() => setIsHolding(true)}
-              onTouchEnd={() => setIsHolding(false)}
-            >
+          <div
+            className={`absolute inset-0 flex items-center justify-center bg-gradient-to-br from-indigo-600/90 via-purple-600/90 to-pink-600/90 rounded-3xl cursor-pointer transition-all duration-300 hover:scale-105 hover:from-indigo-500 hover:via-purple-500 hover:to-pink-500 select-none ${
+              isHolding ? 'opacity-0 pointer-events-none' : 'opacity-100'
+            }`}
+            onMouseDown={() => setIsHolding(true)}
+            onMouseUp={() => setIsHolding(false)}
+            onMouseLeave={() => setIsHolding(false)}
+            onTouchStart={() => setIsHolding(true)}
+            onTouchEnd={() => setIsHolding(false)}
+          >
               <div className="text-center pointer-events-none">
                 <div className="text-6xl mb-2 animate-pulse">🔮</div>
                 <div className="text-white font-black text-xl tracking-widest">长按揭示禁语</div>
@@ -74,7 +75,6 @@ const ForbiddenWordCard: React.FC<Props> = ({ word }) => {
                 ))}
               </div>
             </div>
-          )}
         </div>
 
         <div className="flex justify-center gap-4 mb-10">

@@ -497,8 +497,32 @@ export const playerOps = {
   },
 
   // 更新玩家数据
+  // 更新玩家资料
   update: (playerCode, updates) => {
     if (!db) return;
+
+    // 字段名映射（前端驼峰 -> 数据库下划线）
+    const fieldMap = {
+      'heightCm': 'height_cm',
+      'weightKg': 'weight_kg',
+      'birthday': 'birthday',
+      'avatarUrl': 'avatar_url',
+      'fullbodyImageUrl': 'fullbody_image_url',
+      'bio': 'bio',
+      'hobbies': 'hobbies',
+      'displayedEffectId': 'displayed_effect_id',
+      'displayedGunId': 'displayed_gun_id',
+      'equippedClothesId': 'equipped_clothes_id',
+      'equippedHeadwearId': 'equipped_headwear_id',
+      'equippedAccessoryId': 'equipped_accessory_id',
+      'equippedShoesId': 'equipped_shoes_id',
+      'nickname': 'nickname',
+      'totalGames': 'total_games',
+      'winGames': 'win_games',
+      'carrotCount': 'carrot_count',
+      'vipLevel': 'vip_level'
+    };
+
     const allowed = ['nickname', 'total_games', 'win_games', 'carrot_count', 'vip_level',
                      'height_cm', 'weight_kg', 'birthday', 'avatar_url', 'fullbody_image_url',
                      'bio', 'hobbies', 'displayed_effect_id', 'displayed_gun_id',
@@ -506,8 +530,9 @@ export const playerOps = {
     const fields = [];
     const values = [];
     Object.entries(updates).forEach(([key, value]) => {
-      if (allowed.includes(key)) {
-        fields.push(`${key} = ?`);
+      const dbKey = fieldMap[key] || key;
+      if (allowed.includes(dbKey)) {
+        fields.push(`${dbKey} = ?`);
         values.push(value);
       }
     });

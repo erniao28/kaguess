@@ -11,6 +11,8 @@ interface ChatBoxProps {
   chatBgImage?: string;
   onFontChange?: (size: number) => void;
   onBgChange?: (image: string) => void;
+  onToggleNotification?: () => void;
+  notificationEnabled?: boolean;
 }
 
 const ChatBox: React.FC<ChatBoxProps> = ({
@@ -22,7 +24,9 @@ const ChatBox: React.FC<ChatBoxProps> = ({
   chatFontSize = 14,
   chatBgImage = '',
   onFontChange,
-  onBgChange
+  onBgChange,
+  onToggleNotification,
+  notificationEnabled = false
 }) => {
   const [inputValue, setInputValue] = useState('');
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
@@ -30,6 +34,7 @@ const ChatBox: React.FC<ChatBoxProps> = ({
   const [showFontPicker, setShowFontPicker] = useState(false);
   const [showBgPicker, setShowBgPicker] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
+  const [showQuoteTarget, setShowQuoteTarget] = useState<ChatMessage | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const bgInputRef = useRef<HTMLInputElement>(null);
@@ -113,7 +118,13 @@ const ChatBox: React.FC<ChatBoxProps> = ({
       type = 'emoji';
     }
 
-    onSendMessage(trimmed, type);
+    // 如果有引用目标，发送引用消息
+    if (showQuoteTarget) {
+      onSendMessage(JSON.stringify({ text: trimmed, quote: showQuoteTarget }), type);
+      setShowQuoteTarget(null);
+    } else {
+      onSendMessage(trimmed, type);
+    }
     setInputValue('');
     setShowEmojiPicker(false);
   };
@@ -184,6 +195,15 @@ const ChatBox: React.FC<ChatBoxProps> = ({
     return date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
   };
 
+  const handleQuoteMessage = (msg: ChatMessage) => {
+    setShowQuoteTarget(msg);
+    setShowEmojiPicker(false);
+  };
+
+  const cancelQuote = () => {
+    setShowQuoteTarget(null);
+  };
+
   return (
     <div
       className={`rounded-[24px] shadow-xl border-4 border-slate-100 overflow-hidden flex flex-col h-[360px] transition-colors ${
@@ -215,6 +235,15 @@ const ChatBox: React.FC<ChatBoxProps> = ({
               🗑️
             </button>
           )}
+          <button
+            onClick={onToggleNotification}
+            className={`text-white hover:bg-white/20 rounded-full p-2 transition-colors text-sm ${
+              notificationEnabled ? 'bg-green-500/30' : ''
+            }`}
+            title={notificationEnabled ? '已开启通知' : '点击开启通知'}
+          >
+            🔔
+          </button>
           <button
             onClick={() => setShowFontPicker(!showFontPicker)}
             className="text-white hover:bg-white/20 rounded-full p-2 transition-colors text-sm"
@@ -360,6 +389,10 @@ const ChatBox: React.FC<ChatBoxProps> = ({
                         : 'bg-white text-slate-800 shadow-md rounded-bl-sm'
                     }`}
                     style={{ fontSize: `${msg.type === 'emoji' ? chatFontSize * 2 : chatFontSize}px` }}
+                    onContextMenu={(e) => {
+                      e.preventDefault();
+                      if (!isMe) handleQuoteMessage(msg);
+                    }}
                   >
                     {/* 发送者名字 */}
                     {!isMe && (
@@ -367,6 +400,18 @@ const ChatBox: React.FC<ChatBoxProps> = ({
                         {msg.senderRole === 'FOX' && <span>🦊</span>}
                         {msg.senderRole === 'BUNNY' && <span>🐰</span>}
                         {msg.senderName}
+                      </div>
+                    )}
+
+                    {/* 引用显示 */}
+                    {msg.quote && (
+                      <div className="mb-2 p-2 bg-white/20 rounded-lg border-l-2 border-white/50 text-xs opacity-80">
+                        <div className="font-bold truncate">
+                          {msg.quote.senderRole === 'FOX' ? '🦊' : '🐰'} {msg.quote.senderName}
+                        </div>
+                        <div className="truncate text-xs opacity-70">
+                          {msg.quote.type === 'image' ? '[图片]' : msg.quote.content.substring(0, 30)}
+                        </div>
                       </div>
                     )}
 
@@ -420,6 +465,23 @@ const ChatBox: React.FC<ChatBoxProps> = ({
 
       {/* 输入区域 */}
       <div className="border-t border-slate-200 p-2.5 bg-white">
+        {/* 引用回复提示 */}
+        {showQuoteTarget && (
+          <div className="mb-2 p-2 bg-indigo-50 border border-indigo-200 rounded-xl flex items-center justify-between">
+            <div className="flex items-center gap-2 flex-1 overflow-hidden">
+              <span className="text-indigo-600 font-bold text-xs">回复</span>
+              <span className="text-xs text-slate-500 truncate">
+                {showQuoteTarget.senderName}: {showQuoteTarget.type === 'image' ? '[图片]' : showQuoteTarget.content.substring(0, 30)}
+              </span>
+            </div>
+            <button
+              onClick={cancelQuote}
+              className="text-slate-400 hover:text-slate-600 text-lg font-bold px-2"
+            >
+              ×
+            </button>
+          </div>
+        )}
         <div className="flex items-center gap-2">
           <input
             type="text"

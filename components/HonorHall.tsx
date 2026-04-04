@@ -105,10 +105,12 @@ const HonorHall: React.FC<HonorHallProps> = ({
                         </div>
                       </div>
                       <div className="flex items-center gap-2">
-                        <span className="text-2xl">🥕</span>
-                        <span className={`text-xl font-black ${isMe ? 'text-yellow-600' : 'text-slate-600'}`}>
-                          {entry.carrotCount}
-                        </span>
+                        <div className="px-4 py-2 bg-yellow-100 rounded-xl flex items-center gap-1.5">
+                          <span className="text-xl">🥕</span>
+                          <span className={`text-lg font-black ${isMe ? 'text-yellow-700' : 'text-slate-700'}`}>
+                            {entry.carrotCount}
+                          </span>
+                        </div>
                       </div>
                     </div>
                   );

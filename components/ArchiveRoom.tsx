@@ -29,6 +29,7 @@ interface ArchiveRoomProps {
   socket: any;
   onUpdateProfile: (updates: Partial<PlayerProfile>) => void;
   onChangeNickname?: (newNickname: string) => void;
+  playerRole?: 'FOX' | 'BUNNY';
 }
 
 const HOBBY_OPTIONS = [
@@ -87,7 +88,8 @@ const ArchiveRoom: React.FC<ArchiveRoomProps> = ({
   playerProfile,
   socket,
   onUpdateProfile,
-  onChangeNickname
+  onChangeNickname,
+  playerRole = 'FOX'
 }) => {
   const [activeTab, setActiveTab] = useState<'profile' | 'appearance' | 'stats'>('profile');
   const [isEditing, setIsEditing] = useState(false);
@@ -418,6 +420,74 @@ const ArchiveRoom: React.FC<ArchiveRoomProps> = ({
           {/* 装扮展示 */}
           {activeTab === 'appearance' && (
             <div className="space-y-6">
+              {/* 角色形象预览 */}
+              <div className="bg-gradient-to-br from-indigo-50 to-purple-50 rounded-3xl p-6 shadow-lg border-4 border-indigo-200">
+                <h3 className="text-lg font-black text-slate-700 mb-4">🎭 角色形象</h3>
+                <div className="flex items-center gap-6">
+                  {/* 全身像预览 */}
+                  <div className="w-40 h-56 bg-gradient-to-b from-indigo-100 to-purple-100 rounded-3xl flex items-center justify-center text-7xl overflow-hidden relative">
+                    {playerProfile.fullbodyImageUrl ? (
+                      <img src={playerProfile.fullbodyImageUrl} alt="全身像" className="w-full h-full object-cover" />
+                    ) : (
+                      <div className="text-center p-4">
+                        <div className="text-5xl mb-2">
+                          {playerRole === 'FOX' ? '🦊' : '🐰'}
+                        </div>
+                        <div className="text-xs text-slate-400 font-bold">
+                          {playerRole === 'FOX' ? '尼克' : '朱迪'}
+                        </div>
+                      </div>
+                    )}
+                    {/* 穿戴装备叠加显示 */}
+                    {playerProfile.equippedHeadwearId && (
+                      <div className="absolute top-2 right-2 text-2xl">
+                        {CLOTHING_ITEMS.find(i => i.id === playerProfile.equippedHeadwearId)?.icon}
+                      </div>
+                    )}
+                    {playerProfile.equippedClothesId && (
+                      <div className="absolute bottom-2 left-2 text-2xl">
+                        {CLOTHING_ITEMS.find(i => i.id === playerProfile.equippedClothesId)?.icon}
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex-1">
+                    <div className="flex items-center gap-3 mb-4">
+                      <div className="text-4xl">{playerRole === 'FOX' ? '🦊' : '🐰'}</div>
+                      <div>
+                        <div className="font-black text-slate-700">{playerProfile.nickname}</div>
+                        <div className="text-sm text-slate-500">档案码：{playerProfile.playerCode}</div>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="bg-white rounded-xl p-3 text-center">
+                        <div className="text-xs text-slate-400 font-bold mb-1">👕 衣服</div>
+                        <div className="text-2xl">
+                          {CLOTHING_ITEMS.find(i => i.id === playerProfile.equippedClothesId)?.icon || '—'}
+                        </div>
+                      </div>
+                      <div className="bg-white rounded-xl p-3 text-center">
+                        <div className="text-xs text-slate-400 font-bold mb-1">🎩 头饰</div>
+                        <div className="text-2xl">
+                          {CLOTHING_ITEMS.find(i => i.id === playerProfile.equippedHeadwearId)?.icon || '—'}
+                        </div>
+                      </div>
+                      <div className="bg-white rounded-xl p-3 text-center">
+                        <div className="text-xs text-slate-400 font-bold mb-1">🎒 装饰</div>
+                        <div className="text-2xl">
+                          {CLOTHING_ITEMS.find(i => i.id === playerProfile.equippedAccessoryId)?.icon || '—'}
+                        </div>
+                      </div>
+                      <div className="bg-white rounded-xl p-3 text-center">
+                        <div className="text-xs text-slate-400 font-bold mb-1">👟 鞋子</div>
+                        <div className="text-2xl">
+                          {CLOTHING_ITEMS.find(i => i.id === playerProfile.equippedShoesId)?.icon || '—'}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
               {/* 当前装备 */}
               <div className="bg-white rounded-3xl p-6 shadow-lg">
                 <h3 className="text-lg font-black text-slate-700 mb-4">👔 当前装备</h3>

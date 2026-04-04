@@ -785,7 +785,24 @@ io.on('connection', (socket) => {
     }
 
     playerOps.update(playerCode, updates);
-    socket.emit('update_player_profile_result', { success: true });
+
+    // 获取更新后的完整资料
+    const updatedProfile = playerOps.getByCode(playerCode);
+
+    // 返回给发送者
+    socket.emit('update_player_profile_result', {
+      success: true,
+      profile: updatedProfile
+    });
+
+    // 广播给房间内其他玩家（如果有）
+    const { roomId } = socket.data;
+    if (roomId) {
+      socket.to(roomId).emit('player_profile_updated', {
+        playerCode,
+        profile: updatedProfile
+      });
+    }
   });
 
   // 修改玩家昵称

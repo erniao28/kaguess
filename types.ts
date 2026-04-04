@@ -46,6 +46,13 @@ export interface ChatMessage {
   content: string;
   type: 'text' | 'emoji' | 'image';
   timestamp: number;
+  quote?: {
+    senderId: string;
+    senderName: string;
+    senderRole?: 'FOX' | 'BUNNY';
+    content: string;
+    type: 'text' | 'emoji' | 'image';
+  };
 }
 
 export const EMOJI_LIST = [

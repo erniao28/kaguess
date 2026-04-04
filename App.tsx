@@ -76,6 +76,7 @@ const App: React.FC = () => {
   // 聊天框设置
   const [chatFontSize, setChatFontSize] = useState(14);
   const [chatBgImage, setChatBgImage] = useState('');
+  const [notificationEnabled, setNotificationEnabled] = useState(false);
 
   useEffect(() => {
     playerRoleRef.current = playerRole;
@@ -359,12 +360,22 @@ const App: React.FC = () => {
       }
     });
 
-    newSocket.on('update_player_profile_result', (result: { success: boolean; error?: string }) => {
+    newSocket.on('update_player_profile_result', (result: { success: boolean; error?: string; profile?: any }) => {
       if (result.success) {
         console.log('[PROFILE] 更新成功');
+        // 更新本地玩家档案
+        if (result.profile) {
+          setPlayerProfile(result.profile);
+        }
       } else {
         console.error('[PROFILE] 更新失败:', result.error);
       }
+    });
+
+    // 玩家个人资料更新广播
+    newSocket.on('player_profile_updated', ({ playerCode, profile }: { playerCode: string; profile: any }) => {
+      console.log('[PROFILE] 其他玩家更新资料:', playerCode);
+      // 这里可以更新其他玩家的资料缓存
     });
 
     // 改名结果
@@ -506,14 +517,36 @@ const App: React.FC = () => {
     if (!socket || !roomId) return;
 
     const player = players.find(p => p.type === playerRole);
+
+    // 处理引用消息
+    let quoteData = undefined;
+    let actualContent = content;
+
+    try {
+      const parsed = JSON.parse(content);
+      if (parsed.text && parsed.quote) {
+        actualContent = parsed.text;
+        quoteData = {
+          senderId: parsed.quote.senderId,
+          senderName: parsed.quote.senderName,
+          senderRole: parsed.quote.senderRole,
+          content: parsed.quote.content,
+          type: parsed.quote.type
+        };
+      }
+    } catch (e) {
+      // 不是引用消息，使用原始内容
+    }
+
     const message: ChatMessage = {
       id: `msg-${Date.now()}-${Math.random()}`,
       senderId: socket.id,
       senderName: player?.name || '玩家',
       senderRole: playerRole || undefined,
-      content,
+      content: actualContent,
       type,
-      timestamp: Date.now()
+      timestamp: Date.now(),
+      quote: quoteData
     };
 
     console.log('[CHAT] 发送消息:', message);
@@ -914,6 +947,18 @@ const App: React.FC = () => {
                   chatBgImage={chatBgImage}
                   onFontChange={setChatFontSize}
                   onBgChange={setChatBgImage}
+                  notificationEnabled={notificationEnabled}
+                  onToggleNotification={() => {
+                    if ('Notification' in window) {
+                      if (Notification.permission === 'default') {
+                        Notification.requestPermission().then(permission => {
+                          setNotificationEnabled(permission === 'granted');
+                        });
+                      } else {
+                        setNotificationEnabled(!notificationEnabled);
+                      }
+                    }
+                  }}
                 />
               </div>
               {/* 禁语字卡片 - 放在下方 */}
@@ -994,6 +1039,7 @@ const App: React.FC = () => {
         socket={socket}
         onUpdateProfile={handleUpdatePlayerProfile}
         onChangeNickname={handleChangeNickname}
+        playerRole={playerRole || undefined}
       />
 
       {/* 档案室排行榜模态框 */}
