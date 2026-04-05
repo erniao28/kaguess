@@ -17,6 +17,7 @@ import EffectShop from './components/EffectShop';
 import PlayerProfileModal from './components/PlayerProfileModal';
 import ArchiveRoom from './components/ArchiveRoom';
 import ArchiveRoomRanking from './components/ArchiveRoomRanking';
+import BirthdayGallery from './components/BirthdayGallery';
 
 const App: React.FC = () => {
   const [gameState, setGameState] = useState<GameState>(GameState.ROOM);
@@ -64,6 +65,7 @@ const App: React.FC = () => {
   const [showBirthdayEffect, setShowBirthdayEffect] = useState(false);
   const [birthdayAnimationStarted, setBirthdayAnimationStarted] = useState(false);
   const [showBackgroundElements, setShowBackgroundElements] = useState(false);
+  const [showBirthdayGallery, setShowBirthdayGallery] = useState(false);
 
   // 玩家档案系统相关状态
   const [playerProfile, setPlayerProfile] = useState<any>(null);
@@ -610,17 +612,14 @@ const App: React.FC = () => {
     setBirthdayAnimationStarted(true);
     console.log('[BIRTHDAY] 开始生日动画！');
 
-    // 3 秒后显示背景元素
-    setTimeout(() => {
-      setShowBackgroundElements(true);
-      console.log('[BIRTHDAY] 显示背景装饰！');
-    }, 3000);
+    // 启动电影相框画廊
+    setShowBirthdayGallery(true);
+  };
 
-    // 5 秒后关闭弹窗，进入正式游戏
-    setTimeout(() => {
-      setShowBirthdayEffect(false);
-      console.log('[BIRTHDAY] 动画结束，进入正式游戏！');
-    }, 5000);
+  const handleBirthdayGalleryComplete = () => {
+    console.log('[BIRTHDAY] 电影画廊完成！');
+    setShowBirthdayGallery(false);
+    setShowBirthdayEffect(false);
   };
 
   // 玩家档案系统处理函数
@@ -753,9 +752,9 @@ const App: React.FC = () => {
         </div>
       ))}
 
-      {/* 生日祝福弹窗 */}
-      {showBirthdayEffect && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-[300] flex items-center justify-center p-4" onClick={() => !birthdayAnimationStarted && handleStartBirthdayAnimation()}>
+      {/* 生日祝福弹窗 - 初始点击开始 */}
+      {showBirthdayEffect && !birthdayAnimationStarted && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-[300] flex items-center justify-center p-4" onClick={() => handleStartBirthdayAnimation()}>
           <div
             className="bg-gradient-to-br from-pink-400 to-purple-500 rounded-[40px] shadow-2xl max-w-lg w-full p-8 text-center cursor-pointer transform hover:scale-105 transition-all"
             onClick={() => handleStartBirthdayAnimation()}
@@ -774,32 +773,9 @@ const App: React.FC = () => {
         </div>
       )}
 
-      {/* 生日动画效果 */}
-      {birthdayAnimationStarted && (
-        <>
-          <div className="fixed inset-0 pointer-events-none z-[299]">
-            {[...Array(20)].map((_, i) => (
-              <div
-                key={i}
-                className="absolute text-5xl animate-in fade-in zoom-in duration-700"
-                style={{
-                  left: `${Math.random() * 100}%`,
-                  top: `${Math.random() * 100}%`,
-                  animationDelay: `${i * 0.1}s`,
-                  animation: `float-up 3s ease-out ${i * 0.2}s infinite`
-                }}
-              >
-                {['🎉', '🎊', '✨', '🎈', '🎁', '🦄', '🌟', '💝'][i % 8]}
-              </div>
-            ))}
-          </div>
-          <style>{`
-            @keyframes float-up {
-              0% { transform: translateY(0) rotate(0deg); opacity: 1; }
-              100% { transform: translateY(-100vh) rotate(720deg); opacity: 0; }
-            }
-          `}</style>
-        </>
+      {/* 生日电影相框画廊 */}
+      {showBirthdayGallery && (
+        <BirthdayGallery onComplete={handleBirthdayGalleryComplete} />
       )}
 
       {/* 背景装饰元素 - 测试房间限定 */}
