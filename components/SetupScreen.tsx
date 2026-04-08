@@ -8,6 +8,7 @@ interface Props {
   onStartGame?: () => void;
   canStart?: boolean;
   playerRole?: 'FOX' | 'BUNNY' | null;
+  playerProfile?: any | null; // 用户档案数据
 }
 
 const SetupScreen: React.FC<Props> = ({
@@ -15,10 +16,9 @@ const SetupScreen: React.FC<Props> = ({
   onPlayerReady,
   onStartGame,
   canStart = false,
-  playerRole = null
+  playerRole = null,
+  playerProfile = null
 }) => {
-  const [nickName, setNickName] = useState('');
-  const [judyName, setJudyName] = useState('');
   const [customWordsText, setCustomWordsText] = useState('');
   const [customTruthsText, setCustomTruthsText] = useState('');
   const [customDaresText, setCustomDaresText] = useState('');
@@ -35,7 +35,9 @@ const SetupScreen: React.FC<Props> = ({
 
   const handleReady = (type: 'FOX' | 'BUNNY') => {
     const p = type === 'FOX' ? fox : bunny;
-    const name = type === 'FOX' ? nickName : judyName;
+
+    // 使用档案昵称，如果没有档案则使用默认名称
+    const name = playerProfile?.nickname || (type === 'FOX' ? '尼克' : '朱迪');
 
     const extraWords = (customWordsText.match(/[\u4e00-\u9fa5]/g) || []).map(char => ({
       char, frequency: '自定义', difficulty: '未知' as const, description: '特工手动录入。'
@@ -56,7 +58,7 @@ const SetupScreen: React.FC<Props> = ({
         <div className="space-y-10">
           <div className="text-center md:text-left">
             <h2 className="text-5xl font-black text-slate-800 mb-2">角色认领处 🎭</h2>
-            <p className="text-slate-400 font-bold text-sm tracking-widest uppercase">请点击领取你的身份</p>
+            <p className="text-slate-400 font-bold text-sm tracking-widest uppercase">点击领取你的身份</p>
           </div>
 
           <div className="space-y-6">
@@ -84,21 +86,13 @@ const SetupScreen: React.FC<Props> = ({
                 ) : playerRole === 'BUNNY' && !canChooseBoth && !foxIsTaken ? (
                   <div className="text-slate-400 font-black text-sm">请选择兔子角色</div>
                 ) : (
-                  <div className="flex flex-col sm:flex-row gap-3">
-                    <input
-                      value={nickName}
-                      onChange={e => setNickName(e.target.value)}
-                      placeholder="特工代号..."
-                      className="bg-white px-6 py-3 rounded-2xl border-2 border-orange-200 outline-none font-black w-full focus:ring-4 focus:ring-orange-200"
-                    />
-                    <button
-                      onClick={() => handleReady('FOX')}
-                      disabled={!nickName || (foxIsTaken && !canChooseBoth)}
-                      className="bg-orange-600 text-white px-8 py-3 rounded-2xl font-black shadow-lg hover:bg-orange-700 transition-all active:scale-95 disabled:opacity-50"
-                    >
-                      认领
-                    </button>
-                  </div>
+                  <button
+                    onClick={() => handleReady('FOX')}
+                    disabled={(foxIsTaken && !canChooseBoth)}
+                    className="w-full bg-orange-600 text-white px-8 py-4 rounded-2xl font-black shadow-lg hover:bg-orange-700 transition-all active:scale-95 disabled:opacity-50"
+                  >
+                    {foxIsTaken && !canChooseBoth ? '已被占用' : playerProfile ? `认领（${playerProfile.nickname}）` : '先登录档案'}
+                  </button>
                 )}
               </div>
             </div>
@@ -127,21 +121,13 @@ const SetupScreen: React.FC<Props> = ({
                 ) : playerRole === 'FOX' && !canChooseBoth && !bunnyIsTaken ? (
                   <div className="text-slate-400 font-black text-sm">请选择狐狸角色</div>
                 ) : (
-                  <div className="flex flex-col sm:flex-row gap-3">
-                    <input
-                      value={judyName}
-                      onChange={e => setJudyName(e.target.value)}
-                      placeholder="勋章编号..."
-                      className="bg-white px-6 py-3 rounded-2xl border-2 border-blue-200 outline-none font-black w-full focus:ring-4 focus:ring-blue-200"
-                    />
-                    <button
-                      onClick={() => handleReady('BUNNY')}
-                      disabled={!judyName || (bunnyIsTaken && !canChooseBoth)}
-                      className="bg-blue-700 text-white px-8 py-3 rounded-2xl font-black shadow-lg hover:bg-blue-800 transition-all active:scale-95 disabled:opacity-50"
-                    >
-                      出勤
-                    </button>
-                  </div>
+                  <button
+                    onClick={() => handleReady('BUNNY')}
+                    disabled={(bunnyIsTaken && !canChooseBoth)}
+                    className="w-full bg-blue-700 text-white px-8 py-4 rounded-2xl font-black shadow-lg hover:bg-blue-800 transition-all active:scale-95 disabled:opacity-50"
+                  >
+                    {bunnyIsTaken && !canChooseBoth ? '已被占用' : playerProfile ? `出勤（${playerProfile.nickname}）` : '先登录档案'}
+                  </button>
                 )}
               </div>
             </div>

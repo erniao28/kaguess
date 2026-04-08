@@ -1049,6 +1049,7 @@ const App: React.FC = () => {
           onStartGame={handleStartGame}
           canStart={players.every(p => p.isReady)}
           playerRole={playerRole}
+          playerProfile={playerProfile}
         />
       )}
 

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 
 interface PlayerProfileModalProps {
   isOpen: boolean;
@@ -22,6 +22,7 @@ const PlayerProfileModal: React.FC<PlayerProfileModalProps> = ({
   const [loading, setLoading] = useState(false);
   const [codeAvailable, setCodeAvailable] = useState<boolean | null>(null);
   const [generatedCode, setGeneratedCode] = useState('');
+  const passwordRef = useRef<string>('');
 
   // 生成随机档案码
   const generatePlayerCode = () => {
@@ -41,6 +42,11 @@ const PlayerProfileModal: React.FC<PlayerProfileModalProps> = ({
     }
   }, [isOpen, mode]);
 
+  // 同步 passwordRef
+  useEffect(() => {
+    passwordRef.current = password;
+  }, [password]);
+
   useEffect(() => {
     if (!socket) return;
 
@@ -56,11 +62,11 @@ const PlayerProfileModal: React.FC<PlayerProfileModalProps> = ({
     socket.on('player_profile_result', (result: { success: boolean; error?: string; playerCode?: string }) => {
       setLoading(false);
       if (result.success) {
-        // 创建成功后自动登录 - 使用当前密码值
+        // 创建成功后自动登录 - 使用 passwordRef 保存的密码值
         console.log('[PROFILE] 创建成功，准备自动登录:', result.playerCode);
         socket.emit('login_player', {
           playerCode: result.playerCode,
-          password
+          password: passwordRef.current
         });
       } else {
         setError(result.error || '创建失败');
@@ -142,6 +148,12 @@ const PlayerProfileModal: React.FC<PlayerProfileModalProps> = ({
       handleCreate();
     } else {
       handleLogin(playerCode, password);
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      handleSubmit();
     }
   };
 
@@ -296,6 +308,7 @@ const PlayerProfileModal: React.FC<PlayerProfileModalProps> = ({
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
+              onKeyDown={handleKeyDown}
               placeholder={mode === 'create' ? "至少 4 位" : "输入密码"}
               className="w-full px-4 py-3 border-2 border-slate-200 rounded-xl focus:outline-none focus:border-indigo-500 transition-colors"
               minLength={4}
