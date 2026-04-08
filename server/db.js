@@ -44,8 +44,8 @@ async function initDatabase() {
       content TEXT NOT NULL,
       type TEXT DEFAULT 'text',
       quote TEXT,
-      timestamp INTEGER DEFAULT (strftime('%s', 'now') * 1000),
-      FOREIGN KEY (room_id) REFERENCES rooms(id) ON DELETE CASCADE
+      timestamp INTEGER DEFAULT (strftime('%s', 'now') * 1000)
+      -- FOREIGN KEY (room_id) REFERENCES rooms(id) ON DELETE CASCADE -- 注释掉，SQLite 不支持
     );
 
     -- 预设背景表
@@ -127,8 +127,8 @@ async function initDatabase() {
       room_id TEXT NOT NULL,
       player_name TEXT NOT NULL,
       is_winner INTEGER DEFAULT 0,
-      game_date INTEGER DEFAULT (strftime('%s', 'now')),
-      FOREIGN KEY (room_id) REFERENCES rooms(id) ON DELETE CASCADE
+      game_date INTEGER DEFAULT (strftime('%s', 'now'))
+      -- FOREIGN KEY (room_id) REFERENCES rooms(id) ON DELETE CASCADE -- 注释掉，SQLite 不支持
     );
 
     -- VIP 房间表
