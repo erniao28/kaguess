@@ -718,7 +718,8 @@ io.on('connection', (socket) => {
     // 创建档案
     try {
       const passwordHash = hashPassword(password);
-      playerOps.create(playerCode, passwordHash, nickname || '玩家');
+      // 如果没有昵称，使用档案码作为默认昵称
+      playerOps.create(playerCode, passwordHash, nickname || playerCode);
 
       // 给新玩家赠送一些初始物品（测试用）
       inventoryOps.add(playerCode, 'default_gun_001', 'GUN');
@@ -727,7 +728,7 @@ io.on('connection', (socket) => {
         success: true,
         playerCode
       });
-      console.log(`[PROFILE] 玩家档案创建成功：${playerCode}`);
+      console.log(`[PROFILE] 玩家档案创建成功：${playerCode} (${nickname || playerCode})`);
     } catch (err) {
       socket.emit('player_profile_result', {
         success: false,

@@ -280,25 +280,6 @@ const PlayerProfileModal: React.FC<PlayerProfileModalProps> = ({
             )}
           </div>
 
-          {mode === 'create' && (
-            <>
-              {/* 昵称 */}
-              <div>
-                <label className="block text-sm font-bold text-slate-700 mb-2">
-                  昵称（可选）
-                </label>
-                <input
-                  type="text"
-                  value={nickname}
-                  onChange={(e) => setNickname(e.target.value)}
-                  placeholder="你想怎么被称呼？"
-                  className="w-full px-4 py-3 border-2 border-slate-200 rounded-xl focus:outline-none focus:border-indigo-500 transition-colors"
-                  maxLength={20}
-                />
-              </div>
-            </>
-          )}
-
           {/* 密码 */}
           <div>
             <label className="block text-sm font-bold text-slate-700 mb-2">
@@ -324,6 +305,7 @@ const PlayerProfileModal: React.FC<PlayerProfileModalProps> = ({
                 type="password"
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
+                onKeyDown={handleKeyDown}
                 placeholder="再次输入密码"
                 className="w-full px-4 py-3 border-2 border-slate-200 rounded-xl focus:outline-none focus:border-indigo-500 transition-colors"
                 minLength={4}
@@ -332,14 +314,16 @@ const PlayerProfileModal: React.FC<PlayerProfileModalProps> = ({
           )}
 
           {/* 提示信息 */}
-          <div className="bg-indigo-50 rounded-xl p-4 text-sm text-indigo-700">
-            <p className="font-bold mb-2">💡 重要提示：</p>
-            <ul className="space-y-1">
-              <li>• 档案码是你的唯一身份标识，请妥善保存</li>
-              <li>• 换设备时输入档案码和密码即可恢复所有数据</li>
-              <li>• 建议截图保存档案码</li>
-            </ul>
-          </div>
+          {mode === 'create' && (
+            <div className="bg-indigo-50 rounded-xl p-4 text-sm text-indigo-700">
+              <p className="font-bold mb-2">💡 重要提示：</p>
+              <ul className="space-y-1">
+                <li>• 档案码是你的唯一身份标识，请妥善保存</li>
+                <li>• 换设备时输入档案码和密码即可恢复所有数据</li>
+                <li>• 建议截图保存档案码</li>
+              </ul>
+            </div>
+          )}
 
           {/* 提交按钮 */}
           <button

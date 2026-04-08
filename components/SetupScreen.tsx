@@ -36,8 +36,8 @@ const SetupScreen: React.FC<Props> = ({
   const handleReady = (type: 'FOX' | 'BUNNY') => {
     const p = type === 'FOX' ? fox : bunny;
 
-    // 使用档案昵称，如果没有档案则使用默认名称
-    const name = playerProfile?.nickname || (type === 'FOX' ? '尼克' : '朱迪');
+    // 使用档案昵称，如果没有档案则使用档案码，再没有则使用默认名称
+    const name = playerProfile?.nickname || playerProfile?.playerCode || (type === 'FOX' ? '尼克' : '朱迪');
 
     const extraWords = (customWordsText.match(/[\u4e00-\u9fa5]/g) || []).map(char => ({
       char, frequency: '自定义', difficulty: '未知' as const, description: '特工手动录入。'
