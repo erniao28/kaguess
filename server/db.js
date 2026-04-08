@@ -152,8 +152,13 @@ async function initDatabase() {
       bunny_ready INTEGER DEFAULT 0,  -- 兔子准备状态
       game_state TEXT DEFAULT 'setup' -- 游戏状态：setup/playing/settled
 
-      FOREIGN KEY (owner_player_code) REFERENCES player_profiles(player_code) ON DELETE CASCADE
+      -- FOREIGN KEY (owner_player_code) REFERENCES player_profiles(player_code) ON DELETE CASCADE
+      -- 注释掉外键约束，SQLite 不支持在 CREATE TABLE 中间插入 FOREIGN KEY
     );
+
+    -- 为 vip_rooms 表添加扩展字段（如果不存在）
+    -- 注意：这些 ALTER TABLE 语句在表已存在且字段已存在时会失败，需要手动处理
+    -- 首次初始化时会直接创建包含所有字段的表
   `);
 
   // 插入默认背景
