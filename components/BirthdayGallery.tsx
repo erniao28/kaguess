@@ -124,9 +124,10 @@ const BIRTHDAY_FRAMES: Frame[] = [
 
 interface Props {
   onComplete?: () => void;
+  onSkip?: () => void;
 }
 
-const BirthdayGallery: React.FC<Props> = ({ onComplete }) => {
+const BirthdayGallery: React.FC<Props> = ({ onComplete, onSkip }) => {
   const [currentFrame, setCurrentFrame] = useState(0);
   const [isTransitioning, setIsTransitioning] = useState(false);
   const [showFrame, setShowFrame] = useState(false);
@@ -168,11 +169,19 @@ const BirthdayGallery: React.FC<Props> = ({ onComplete }) => {
       }, 800);
     }, currentData.duration * 1000);
 
+    // 如果外部触发跳过，立即完成
+    if (onSkip) {
+      return () => {
+        clearTimeout(timer);
+        clearInterval(progressInterval);
+      };
+    }
+
     return () => {
       clearTimeout(timer);
       clearInterval(progressInterval);
     };
-  }, [currentFrame, currentData.duration, onComplete]);
+  }, [currentFrame, currentData.duration, onComplete, onSkip]);
 
   const getFrameStyle = (style: string) => {
     switch (style) {
@@ -312,6 +321,14 @@ const BirthdayGallery: React.FC<Props> = ({ onComplete }) => {
           </div>
         </div>
       )}
+
+      {/* 跳过按钮 */}
+      <button
+        onClick={() => onSkip?.()}
+        className="absolute top-4 right-4 z-30 px-6 py-2 bg-white/20 hover:bg-white/30 backdrop-blur-sm rounded-full text-white font-bold transition-all border-2 border-white/50"
+      >
+        ⏭️ 跳过
+      </button>
 
       {/* CSS 动画定义 */}
       <style>{`

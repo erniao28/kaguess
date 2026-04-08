@@ -1,0 +1,1 @@
+- [更新代码不碰数据库](feedback-no-db-touch.md) — 更新代码时只执行 git pull → npm install → pm2 restart，绝对不碰数据库

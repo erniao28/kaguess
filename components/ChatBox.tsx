@@ -8,8 +8,10 @@ interface ChatBoxProps {
   mySocketId?: string | null;
   onClearHistory?: () => void;
   chatFontSize?: number;
+  chatFontColor?: string;
   chatBgImage?: string;
   onFontChange?: (size: number) => void;
+  onFontColorChange?: (color: string) => void;
   onBgChange?: (image: string) => void;
   onToggleNotification?: () => void;
   notificationEnabled?: boolean;
@@ -22,8 +24,10 @@ const ChatBox: React.FC<ChatBoxProps> = ({
   mySocketId,
   onClearHistory,
   chatFontSize = 14,
+  chatFontColor = '#1e293b',
   chatBgImage = '',
   onFontChange,
+  onFontColorChange,
   onBgChange,
   onToggleNotification,
   notificationEnabled = false
@@ -32,15 +36,33 @@ const ChatBox: React.FC<ChatBoxProps> = ({
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [showImagePreview, setShowImagePreview] = useState<string | null>(null);
   const [showFontPicker, setShowFontPicker] = useState(false);
+  const [showColorPicker, setShowColorPicker] = useState(false);
   const [showBgPicker, setShowBgPicker] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [showQuoteTarget, setShowQuoteTarget] = useState<ChatMessage | null>(null);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const bgInputRef = useRef<HTMLInputElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
+
+  // 加载用户偏好设置
+  useEffect(() => {
+    const saved = localStorage.getItem('chat_preferences');
+    if (saved) {
+      try {
+        const { fontSize, fontColor } = JSON.parse(saved);
+        if (fontSize && onFontChange) onFontChange(fontSize);
+        if (fontColor && onFontColorChange) onFontColorChange(fontColor);
+      } catch (e) {
+        console.error('[CHAT] 加载偏好设置失败:', e);
+      }
+    }
+  }, []);
 
   const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    // 使用容器内部滚动，而不是 scrollIntoView（会滚动整个页面）
+    if (messagesContainerRef.current) {
+      messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight;
+    }
   };
 
   useEffect(() => {
@@ -127,13 +149,6 @@ const ChatBox: React.FC<ChatBoxProps> = ({
     }
     setInputValue('');
     setShowEmojiPicker(false);
-  };
-
-  const handleKeyPress = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      handleSend();
-    }
   };
 
   const handleEmojiSelect = (emoji: string) => {
@@ -252,6 +267,13 @@ const ChatBox: React.FC<ChatBoxProps> = ({
             🔤
           </button>
           <button
+            onClick={() => setShowColorPicker(!showColorPicker)}
+            className="text-white hover:bg-white/20 rounded-full p-2 transition-colors text-sm"
+            title="字体颜色"
+          >
+            🎨
+          </button>
+          <button
             onClick={() => setShowBgPicker(!showBgPicker)}
             className="text-white hover:bg-white/20 rounded-full p-2 transition-colors text-sm"
             title="聊天背景"
@@ -285,6 +307,11 @@ const ChatBox: React.FC<ChatBoxProps> = ({
               onClick={() => {
                 onFontChange?.(size);
                 setShowFontPicker(false);
+                // 保存偏好设置
+                localStorage.setItem('chat_preferences', JSON.stringify({
+                  fontSize: size,
+                  fontColor: chatFontColor
+                }));
               }}
               className={`px-3 py-1 rounded-full font-bold transition-all ${
                 chatFontSize === size
@@ -294,6 +321,34 @@ const ChatBox: React.FC<ChatBoxProps> = ({
             >
               {size}
             </button>
+          ))}
+        </div>
+      )}
+
+      {/* 字体颜色选择器 */}
+      {showColorPicker && (
+        <div className="bg-slate-50 border-b border-slate-200 p-3 flex items-center gap-2 z-10">
+          <span className="text-xs text-slate-500 font-bold">颜色：</span>
+          {['#1e293b', '#334155', '#475569', '#dc2626', '#2563eb', '#16a34a', '#9333ea', '#db2777'].map((color) => (
+            <button
+              key={color}
+              onClick={() => {
+                onFontColorChange?.(color);
+                setShowColorPicker(false);
+                // 保存偏好设置
+                localStorage.setItem('chat_preferences', JSON.stringify({
+                  fontSize: chatFontSize,
+                  fontColor: color
+                }));
+              }}
+              className={`w-6 h-6 rounded-full border-2 transition-all ${
+                chatFontColor === color
+                  ? 'border-indigo-500 scale-110'
+                  : 'border-slate-300 hover:scale-105'
+              }`}
+              style={{ backgroundColor: color }}
+              title={color}
+            />
           ))}
         </div>
       )}
@@ -367,7 +422,11 @@ const ChatBox: React.FC<ChatBoxProps> = ({
       )}
 
       {/* 消息列表 */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-3 relative z-10" style={{ backgroundColor: chatBgImage ? 'transparent' : '#f1f5f9' }}>
+      <div
+        ref={messagesContainerRef}
+        className="flex-1 overflow-y-auto p-4 space-y-3 relative z-10"
+        style={{ backgroundColor: chatBgImage ? 'transparent' : '#f1f5f9' }}
+      >
         {messages.length === 0 ? (
           <div className="text-center text-slate-400 py-8">
             <span className="text-4xl mb-2 block">💬</span>
@@ -388,7 +447,7 @@ const ChatBox: React.FC<ChatBoxProps> = ({
                         ? 'bg-gradient-to-r from-indigo-500 to-purple-500 text-white rounded-br-sm'
                         : 'bg-white text-slate-800 shadow-md rounded-bl-sm'
                     }`}
-                    style={{ fontSize: `${msg.type === 'emoji' ? chatFontSize * 2 : chatFontSize}px` }}
+                    style={{ fontSize: `${msg.type === 'emoji' ? chatFontSize * 2 : chatFontSize}px`, color: !isMe && msg.type !== 'emoji' ? chatFontColor : undefined }}
                     onContextMenu={(e) => {
                       e.preventDefault();
                       if (!isMe) handleQuoteMessage(msg);
@@ -439,7 +498,6 @@ const ChatBox: React.FC<ChatBoxProps> = ({
             );
           })
         )}
-        <div ref={messagesEndRef} />
       </div>
 
       {/* 图片预览模态框 */}
@@ -464,7 +522,14 @@ const ChatBox: React.FC<ChatBoxProps> = ({
       )}
 
       {/* 输入区域 */}
-      <div className="border-t border-slate-200 p-2.5 bg-white">
+      <form
+        className="border-t border-slate-200 p-2.5 bg-white"
+        onSubmit={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          return false;
+        }}
+      >
         {/* 引用回复提示 */}
         {showQuoteTarget && (
           <div className="mb-2 p-2 bg-indigo-50 border border-indigo-200 rounded-xl flex items-center justify-between">
@@ -475,6 +540,7 @@ const ChatBox: React.FC<ChatBoxProps> = ({
               </span>
             </div>
             <button
+              type="button"
               onClick={cancelQuote}
               className="text-slate-400 hover:text-slate-600 text-lg font-bold px-2"
             >
@@ -487,20 +553,45 @@ const ChatBox: React.FC<ChatBoxProps> = ({
             type="text"
             value={inputValue}
             onChange={(e) => setInputValue(e.target.value)}
-            onKeyPress={handleKeyPress}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                e.stopPropagation();
+                // 移除焦点
+                (e.target as HTMLInputElement).blur();
+                // 延迟发送，确保默认行为已被阻止
+                setTimeout(() => handleSend(), 0);
+                return false;
+              }
+            }}
+            onKeyPress={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                e.stopPropagation();
+                return false;
+              }
+            }}
             placeholder={isConnected ? "输入消息..." : "未连接"}
             disabled={!isConnected}
             className="flex-1 px-4 py-2 border-2 border-slate-200 rounded-full focus:outline-none focus:border-indigo-500 transition-colors text-sm"
+            autoComplete="off"
+            autoCorrect="off"
+            autoCapitalize="off"
+            spellCheck="false"
           />
           <button
-            onClick={handleSend}
+            type="button"
+            onClick={(e) => {
+              e.preventDefault();
+              handleSend();
+            }}
             disabled={!inputValue.trim() || !isConnected}
             className="px-5 py-2 bg-gradient-to-r from-indigo-500 to-purple-500 text-white rounded-full font-bold hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed transition-all text-sm"
           >
             发送
           </button>
         </div>
-      </div>
+      </form>
     </div>
   );
 };

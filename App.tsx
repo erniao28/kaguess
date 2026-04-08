@@ -77,8 +77,51 @@ const App: React.FC = () => {
 
   // 聊天框设置
   const [chatFontSize, setChatFontSize] = useState(14);
+  const [chatFontColor, setChatFontColor] = useState('#1e293b');
   const [chatBgImage, setChatBgImage] = useState('');
   const [notificationEnabled, setNotificationEnabled] = useState(false);
+
+  // 页面加载时检查是否有保存的登录状态和房间信息
+  useEffect(() => {
+    const savedProfile = localStorage.getItem('player_profile');
+    const savedRoom = localStorage.getItem('private_room_info');
+
+    if (savedProfile) {
+      try {
+        const profile = JSON.parse(savedProfile);
+        console.log('[PROFILE] 检测到已保存的登录档案:', profile.playerCode);
+        // 自动尝试登录
+        if (socket?.connected) {
+          socket.emit('login_player', {
+            playerCode: profile.playerCode,
+            password: profile.passwordHash
+          });
+        }
+      } catch (e) {
+        console.error('[PROFILE] 解析保存的档案失败:', e);
+        localStorage.removeItem('player_profile');
+      }
+    }
+
+    if (savedRoom && savedProfile) {
+      try {
+        const { roomId } = JSON.parse(savedRoom);
+        console.log('[PROFILE] 检测到已保存的房间:', roomId);
+        // 等待登录后重连
+        if (playerProfile) {
+          setTimeout(() => {
+            if (socket?.connected) {
+              console.log('[PROFILE] 尝试重新加入私密房间:', roomId);
+              socket.emit('rejoin_private_room', { roomId, playerCode: playerProfile.playerCode });
+            }
+          }, 1000);
+        }
+      } catch (e) {
+        console.error('[PROFILE] 解析保存的房间信息失败:', e);
+        localStorage.removeItem('private_room_info');
+      }
+    }
+  }, [socket, playerProfile]);
 
   useEffect(() => {
     playerRoleRef.current = playerRole;
@@ -93,12 +136,48 @@ const App: React.FC = () => {
   // 初始化 socket 和所有事件监听器
   useEffect(() => {
     console.log('[SOCKET] 初始化连接');
-    const newSocket = io(SERVER_URL, { transports: ['websocket', 'polling'] });
+    const newSocket = io(SERVER_URL, {
+      transports: ['websocket', 'polling'],
+      reconnection: true,
+      reconnectionAttempts: 10,
+      reconnectionDelay: 1000,
+      timeout: 10000
+    });
     setSocket(newSocket);
 
     newSocket.on('connect', () => {
       console.log('[SOCKET] 已连接:', newSocket.id);
       setMySocketId(newSocket.id);
+    });
+
+    // 断线重连事件
+    newSocket.on('reconnect', () => {
+      console.log('[SOCKET] 重连成功');
+      // 重连后尝试恢复房间状态
+      if (roomId && isPrivateRoom) {
+        console.log('[SOCKET] 尝试恢复私密房间状态:', roomId);
+      }
+    });
+
+    newSocket.on('reconnect_attempt', (attemptNumber) => {
+      console.log('[SOCKET] 重连尝试中...', attemptNumber);
+    });
+
+    newSocket.on('connect_error', (error) => {
+      console.error('[SOCKET] 连接错误:', error);
+    });
+
+    newSocket.on('disconnect', (reason) => {
+      console.log('[SOCKET] 断开连接:', reason);
+    });
+
+    // 玩家离线通知（私密房间专用）
+    newSocket.on('player_disconnected', ({ role, socketId, playerName }) => {
+      console.log('[PLAYER] 玩家离线:', { role, socketId, playerName });
+      // 私密房间中，不立即清除玩家数据，显示离线提示即可
+      if (isPrivateRoom) {
+        console.log(`私密房间玩家 ${playerName || role} 暂时离线，房间状态保留`);
+      }
     });
 
     // 房间事件
@@ -134,17 +213,8 @@ const App: React.FC = () => {
         setPlayerRole('FOX');
       } else if (isBunny && playerRoleRef.current !== 'BUNNY') {
         setPlayerRole('BUNNY');
-        // 测试房间 000，朱迪进入时显示生日祝福
-        if (roomId === '000') {
-          console.log('[BIRTHDAY] 朱迪进入测试房间，触发欢迎！');
-          setShowBirthdayEffect(true);
-        }
       } else if (fox && !bunny && fox.socketId !== currentSocketId) {
         setPlayerRole('BUNNY'); // 狐狸被占了，我只能是兔子
-        if (roomId === '000') {
-          console.log('[BIRTHDAY] 朱迪进入测试房间，触发欢迎！');
-          setShowBirthdayEffect(true);
-        }
       } else if (bunny && !fox && bunny.socketId !== currentSocketId) {
         setPlayerRole('FOX'); // 兔子被占了，我只能是狐狸
       } else if (!fox && !bunny && playerRoleRef.current === null) {
@@ -260,16 +330,39 @@ const App: React.FC = () => {
       setIsPrivateRoom(true);
       setShowPrivateRoomModal(false);
       setGameState(GameState.SETUP);
+      // 保存房间信息到 localStorage
+      localStorage.setItem('private_room_info', JSON.stringify({ roomId, password: privateRoomPassword }));
     });
 
-    newSocket.on('private_room_joined', ({ roomId, bgImage, history }) => {
+    // 玩家重新加入房间（其他玩家收到通知）
+    newSocket.on('player_rejoined', ({ playerIdentifier, socketId }) => {
+      console.log('[PRIVATE_ROOM] 玩家重新加入:', { playerIdentifier, socketId });
+    });
+
+    // 聊天历史（重连时收到）
+    newSocket.on('chat_history', (history) => {
+      console.log('[CHAT] 收到历史消息:', history.length, '条');
+      setChatMessages(history);
+    });
+
+    newSocket.on('private_room_joined', ({ roomId, bgImage, history, syncData }) => {
       console.log('[PRIVATE_ROOM] 加入成功:', roomId);
       setRoomId(roomId);
       setRoomBgImage(bgImage);
       setIsPrivateRoom(true);
-      setChatMessages(history);
+      if (history && history.length > 0) {
+        setChatMessages(history);
+      }
       setShowPrivateRoomModal(false);
       setGameState(GameState.SETUP);
+
+      // 如果有同步数据，处理一下
+      if (syncData) {
+        console.log('[PRIVATE_ROOM] 房间同步数据:', syncData);
+      }
+
+      // 保存房间信息到 localStorage，便于刷新后恢复
+      localStorage.setItem('private_room_info', JSON.stringify({ roomId, password: privateRoomPassword }));
     });
 
     newSocket.on('private_room_error', (error: string) => {
@@ -359,6 +452,14 @@ const App: React.FC = () => {
       if (result.success && result.player) {
         setPlayerProfile(result.player);
         console.log('[PROFILE] 登录成功:', result.player);
+
+        // 保存登录状态到 localStorage（以便刷新后自动重连）
+        // 注意：passwordHash 在发送登录请求时使用，这里保存的是哈希值
+        localStorage.setItem('player_profile', JSON.stringify({
+          playerCode: result.player.playerCode,
+          nickname: result.player.nickname,
+          passwordHash: result.player.passwordHash // 服务器返回的密码哈希
+        }));
       }
     });
 
@@ -476,9 +577,17 @@ const App: React.FC = () => {
     setPunishmentBanks(mergedPunishments);
 
     const role = player.type === 'FOX' ? 'fox' : 'bunny';
-    socket?.emit('select_role', { roomId, role, player });
+
+    // 使用完整的档案数据（如果已登录）
+    const playerWithProfile = playerProfile ? {
+      ...player,
+      playerCode: playerProfile.playerCode,
+      nickname: playerProfile.nickname
+    } : player;
+
+    socket?.emit('select_role', { roomId, role, player: playerWithProfile });
     socket?.emit('player_ready', { roomId, role });
-    socket?.emit('game_message', { roomId, message: { type: 'UPDATE_PLAYER', player } });
+    socket?.emit('game_message', { roomId, message: { type: 'UPDATE_PLAYER', player: playerWithProfile } });
     socket?.emit('game_message', { roomId, message: { type: 'SYNC_BANKS', extraWords, punishments: mergedPunishments } });
   };
 
@@ -540,10 +649,13 @@ const App: React.FC = () => {
       // 不是引用消息，使用原始内容
     }
 
+    // 优先使用档案昵称，其次使用玩家名字
+    const senderName = playerProfile?.nickname || player?.name || '玩家';
+
     const message: ChatMessage = {
       id: `msg-${Date.now()}-${Math.random()}`,
       senderId: socket.id,
-      senderName: player?.name || '玩家',
+      senderName,
       senderRole: playerRole || undefined,
       content: actualContent,
       type,
@@ -620,6 +732,14 @@ const App: React.FC = () => {
     console.log('[BIRTHDAY] 电影画廊完成！');
     setShowBirthdayGallery(false);
     setShowBirthdayEffect(false);
+    setBirthdayAnimationStarted(false);
+  };
+
+  const handleSkipBirthdayGallery = () => {
+    console.log('[BIRTHDAY] 跳过生日画廊！');
+    setShowBirthdayGallery(false);
+    setShowBirthdayEffect(false);
+    setBirthdayAnimationStarted(false);
   };
 
   // 玩家档案系统处理函数
@@ -660,6 +780,18 @@ const App: React.FC = () => {
       socket.emit('get_my_carrots');
     }
   }, [roomId, socket]);
+
+  // 当 gameState 变回 ROOM 时，清除私密房间信息（表示用户主动退出）
+  useEffect(() => {
+    if (gameState === GameState.ROOM && isPrivateRoom) {
+      console.log('[PROFILE] 用户已退出私密房间，清除保存的房间信息');
+      localStorage.removeItem('private_room_info');
+      setIsPrivateRoom(false);
+      setRoomId('');
+      setRoomBgImage('');
+      setChatMessages([]);
+    }
+  }, [gameState]);
 
   // 进入房间时清空聊天消息（仅公共房间）
   useEffect(() => {
@@ -775,7 +907,7 @@ const App: React.FC = () => {
 
       {/* 生日电影相框画廊 */}
       {showBirthdayGallery && (
-        <BirthdayGallery onComplete={handleBirthdayGalleryComplete} />
+        <BirthdayGallery onComplete={handleBirthdayGalleryComplete} onSkip={handleSkipBirthdayGallery} />
       )}
 
       {/* 背景装饰元素 - 测试房间限定 */}
@@ -920,8 +1052,10 @@ const App: React.FC = () => {
                   mySocketId={mySocketId}
                   onClearHistory={isPrivateRoom ? handleClearChatHistory : undefined}
                   chatFontSize={chatFontSize}
+                  chatFontColor={chatFontColor}
                   chatBgImage={chatBgImage}
                   onFontChange={setChatFontSize}
+                  onFontColorChange={setChatFontColor}
                   onBgChange={setChatBgImage}
                   notificationEnabled={notificationEnabled}
                   onToggleNotification={() => {

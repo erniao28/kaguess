@@ -140,6 +140,18 @@ async function initDatabase() {
       created_at INTEGER DEFAULT (strftime('%s', 'now')),
       updated_at INTEGER DEFAULT (strftime('%s', 'now')),
       expires_at INTEGER,  -- 可选的过期时间
+
+      -- 房间游戏状态扩展字段
+      fox_player_code TEXT,           -- 狐狸角色玩家档案码
+      bunny_player_code TEXT,         -- 兔子角色玩家档案码
+      fox_nickname TEXT,              -- 狐狸玩家昵称（用于显示）
+      bunny_nickname TEXT,            -- 兔子玩家昵称（用于显示）
+      current_word TEXT,              -- 当前词汇（JSON 字符串）
+      punishment_banks TEXT,          -- 惩罚库（JSON 字符串）
+      fox_ready INTEGER DEFAULT 0,    -- 狐狸准备状态
+      bunny_ready INTEGER DEFAULT 0,  -- 兔子准备状态
+      game_state TEXT DEFAULT 'setup' -- 游戏状态：setup/playing/settled
+
       FOREIGN KEY (owner_player_code) REFERENCES player_profiles(player_code) ON DELETE CASCADE
     );
   `);
@@ -262,12 +274,37 @@ export const roomOps = {
     stmt.run(values);
     saveDatabase();
   },
+
+  updateBackground: (roomId, bgImage) => {
+    if (!db) return;
+    const stmt = db.prepare('UPDATE rooms SET bg_image = ?, updated_at = strftime("%s", "now") WHERE id = ?');
+    stmt.run([bgImage, roomId]);
+    saveDatabase();
+  },
+
+  updatePassword: (roomId, password) => {
+    if (!db) return;
+    const stmt = db.prepare('UPDATE rooms SET password = ?, updated_at = strftime("%s", "now") WHERE id = ?');
+    stmt.run([password || '', roomId]);
+    saveDatabase();
+  },
 };
 
 // 消息操作
 export const messageOps = {
   add: (roomId, senderId, senderName, senderRole, content, type = 'text', quote = null) => {
     if (!db) return;
+
+    // 检查 messages 表是否有 quote 列
+    let hasQuoteColumn = false;
+    try {
+      const result = db.exec('PRAGMA table_info(messages)');
+      if (result && result[0] && result[0].values) {
+        hasQuoteColumn = result[0].values.some(row => row[1] === 'quote');
+      }
+    } catch (e) {
+      console.error('[MESSAGE] 检查 quote 列失败:', e);
+    }
 
     // 如果有引用对象，序列化为 JSON 字符串存储
     let quoteJson = null;
@@ -279,8 +316,14 @@ export const messageOps = {
       }
     }
 
-    const stmt = db.prepare('INSERT INTO messages (room_id, sender_id, sender_name, sender_role, content, type, quote) VALUES (?, ?, ?, ?, ?, ?, ?)');
-    stmt.run([roomId, senderId, senderName, senderRole, content, type, quoteJson]);
+    if (hasQuoteColumn) {
+      const stmt = db.prepare('INSERT INTO messages (room_id, sender_id, sender_name, sender_role, content, type, quote) VALUES (?, ?, ?, ?, ?, ?, ?)');
+      stmt.run([roomId, senderId, senderName, senderRole, content, type, quoteJson]);
+    } else {
+      // 旧数据库，不存储 quote
+      const stmt = db.prepare('INSERT INTO messages (room_id, sender_id, sender_name, sender_role, content, type) VALUES (?, ?, ?, ?, ?, ?)');
+      stmt.run([roomId, senderId, senderName, senderRole, content, type]);
+    }
     saveDatabase();
   },
 
@@ -377,6 +420,18 @@ export const carrotOps = {
     stmt.run([playerIdentifier, count, count]);
     saveDatabase();
   },
+
+  // 添加胡萝卜（增加指定数量）
+  addCarrot: (playerIdentifier, delta) => {
+    if (!db) return;
+    const stmt = db.prepare(`
+      INSERT INTO player_carrots (player_identifier, carrot_count, last_updated)
+      VALUES (?, COALESCE((SELECT carrot_count FROM player_carrots WHERE player_identifier = ?), 0) + ?, strftime('%s', 'now'))
+      ON CONFLICT(player_identifier) DO UPDATE SET carrot_count = carrot_count + ?, last_updated = strftime('%s', 'now')
+    `);
+    stmt.run([playerIdentifier, playerIdentifier, delta, delta]);
+    saveDatabase();
+  },
 };
 
 // 玩家特效操作
@@ -410,6 +465,11 @@ export const effectOps = {
     const has = stmt.step();
     stmt.free();
     return has;
+  },
+
+  // 解锁特效（别名，用于兼容服务器调用）
+  unlock: (playerIdentifier, effectId) => {
+    effectOps.addEffect(playerIdentifier, effectId);
   },
 };
 
@@ -650,6 +710,20 @@ export const vipRoomOps = {
     return null;
   },
 
+  // 获取完整房间状态（含玩家和游戏状态）
+  getFullRoomState: (roomId) => {
+    if (!db) return null;
+    const stmt = db.prepare('SELECT * FROM vip_rooms WHERE id = ?');
+    stmt.bind([roomId]);
+    if (stmt.step()) {
+      const room = stmt.getAsObject();
+      stmt.free();
+      return room;
+    }
+    stmt.free();
+    return null;
+  },
+
   delete: (roomId) => {
     if (!db) return;
     const stmt = db.prepare('DELETE FROM vip_rooms WHERE id = ?');
@@ -676,6 +750,107 @@ export const vipRoomOps = {
     }
     stmt.free();
     return rooms;
+  },
+
+  // 根据档案码查找玩家所在的房间
+  findRoomByPlayerCode: (playerCode) => {
+    if (!db) return null;
+    const stmt = db.prepare(`
+      SELECT * FROM vip_rooms
+      WHERE fox_player_code = ? OR bunny_player_code = ?
+      LIMIT 1
+    `);
+    stmt.bind([playerCode, playerCode]);
+    if (stmt.step()) {
+      const room = stmt.getAsObject();
+      stmt.free();
+      return room;
+    }
+    stmt.free();
+    return null;
+  },
+
+  // 更新房间玩家状态
+  updatePlayers: (roomId, foxPlayerCode, bunnyPlayerCode, foxNickname, bunnyNickname) => {
+    if (!db) return;
+    const stmt = db.prepare(`
+      UPDATE vip_rooms
+      SET fox_player_code = ?, bunny_player_code = ?,
+          fox_nickname = ?, bunny_nickname = ?,
+          updated_at = strftime('%s', 'now')
+      WHERE id = ?
+    `);
+    stmt.run([foxPlayerCode, bunnyPlayerCode, foxNickname, bunnyNickname, roomId]);
+    saveDatabase();
+  },
+
+  // 更新房间玩家角色绑定（单个玩家）
+  updatePlayerRole: (roomId, role, playerCode, nickname) => {
+    if (!db) return;
+    const roleColumn = role === 'fox' ? 'fox_player_code' : 'bunny_player_code';
+    const nicknameColumn = role === 'fox' ? 'fox_nickname' : 'bunny_nickname';
+    const stmt = db.prepare(`
+      UPDATE vip_rooms
+      SET ${roleColumn} = ?, ${nicknameColumn} = ?, updated_at = strftime('%s', 'now')
+      WHERE id = ?
+    `);
+    stmt.run([playerCode, nickname, roomId]);
+    saveDatabase();
+  },
+
+  // 更新游戏状态
+  updateGameState: (roomId, gameState) => {
+    if (!db) return;
+    const updates = [];
+    const values = [];
+
+    if (gameState.word !== undefined) {
+      updates.push('current_word = ?');
+      values.push(typeof gameState.word === 'string' ? gameState.word : JSON.stringify(gameState.word));
+    }
+    if (gameState.punishments !== undefined) {
+      updates.push('punishment_banks = ?');
+      values.push(typeof gameState.punishments === 'string' ? gameState.punishments : JSON.stringify(gameState.punishments));
+    }
+    if (gameState.game_state !== undefined) {
+      updates.push('game_state = ?');
+      values.push(gameState.game_state);
+    }
+
+    if (updates.length > 0) {
+      updates.push('updated_at = strftime("%s", "now")');
+      values.push(roomId);
+      const stmt = db.prepare(`UPDATE vip_rooms SET ${updates.join(', ')} WHERE id = ?`);
+      stmt.run(values);
+      saveDatabase();
+    }
+  },
+
+  // 更新准备状态
+  updateReadyState: (roomId, role, isReady) => {
+    if (!db) return;
+    const column = role === 'fox' ? 'fox_ready' : 'bunny_ready';
+    const stmt = db.prepare(`
+      UPDATE vip_rooms
+      SET ${column} = ?, updated_at = strftime('%s', 'now')
+      WHERE id = ?
+    `);
+    stmt.run([isReady ? 1 : 0, roomId]);
+    saveDatabase();
+  },
+
+  // 清除房间玩家状态（游戏重置时）
+  clearGame: (roomId) => {
+    if (!db) return;
+    const stmt = db.prepare(`
+      UPDATE vip_rooms
+      SET current_word = NULL, punishment_banks = NULL,
+          fox_ready = 0, bunny_ready = 0, game_state = 'setup',
+          updated_at = strftime('%s', 'now')
+      WHERE id = ?
+    `);
+    stmt.run([roomId]);
+    saveDatabase();
   },
 };
 

@@ -44,7 +44,9 @@
       "Bash(powershell -Command \"Stop-Process -Id 69328 -Force\")",
       "Bash(powershell:*)",
       "Bash(dir /b /o-d rooms.db*)",
-      "Bash(certutil:*)"
+      "Bash(certutil:*)",
+      "Bash(md5sum dist/assets/*.js)",
+      "Bash(node --check server/index.js)"
     ]
   }
 }

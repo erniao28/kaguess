@@ -85,6 +85,17 @@ io.on('connection', (socket) => {
     // 先通知房间内其他玩家有新玩家加入
     socket.to(roomId).emit('player_joined', { socketId: socket.id });
 
+    // 000 和 929 房间：每次进入时触发 生日特效
+    if (roomId === '000') {
+      console.log('[BIRTHDAY] 玩家进入 000 测试房间，触发 生日欢迎！');
+      io.to(roomId).emit('birthday_effect', { type: 'birthday', message: '生日快乐！' });
+    }
+    if (roomId === '929') {
+      console.log('[BIRTHDAY_929] 玩家进入 929 房间，触发 生日特效！');
+      io.to(roomId).emit('birthday_effect', { type: 'birthday', message: '生日快乐！' });
+      io.to(roomId).emit('timed_animation', { type: 'celebration', emoji: '🎂', message: '生日快乐！' });
+    }
+
     // 再同步房间状态给新玩家（确保包含所有已选择的角色）
     const syncData = {
       fox: room.state.fox ? { ...room.state.fox.player, socketId: room.state.fox.socketId } : null,
@@ -106,63 +117,63 @@ io.on('connection', (socket) => {
       return;
     }
 
-    console.log(`[SELECT_ROLE] 玩家 ${socket.id} 尝试选择角色：${role}, 房间状态：fox=${room.state.fox ? room.state.fox.socketId : 'null'}, bunny=${room.state.bunny ? room.state.bunny.socketId : 'null'}`);
+    console.log(`[SELECT_ROLE] 玩家 ${socket.id} 尝试选择角色：${role}, 房间状态：fox=${room.state.fox ? room.state.fox.playerCode || room.state.fox.socketId : 'null'}, bunny=${room.state.bunny ? room.state.bunny.playerCode || room.state.bunny.socketId : 'null'}`);
 
-    // 检查目标角色是否已被**其他**玩家占用
-    if (role === 'fox' && room.state.fox && room.state.fox.socketId !== socket.id) {
+    // 验证：必须已登录（有 playerCode）
+    if (!socket.data.playerCode) {
+      socket.emit('role_error', '请先登录用户档案');
+      return;
+    }
+
+    // 验证：档案码格式
+    if (!/^[a-zA-Z0-9]{6,8}$/.test(socket.data.playerCode)) {
+      socket.emit('role_error', '档案码格式不正确');
+      return;
+    }
+
+    // 检查目标角色是否已被**其他**玩家占用（使用 playerCode 比较）
+    if (role === 'fox' && room.state.fox && room.state.fox.playerCode !== socket.data.playerCode) {
       socket.emit('role_error', '狐狸角色已被选择');
       console.log(`[SELECT_ROLE] 角色 ${role} 已被其他玩家占用`);
       return;
     }
-    if (role === 'bunny' && room.state.bunny && room.state.bunny.socketId !== socket.id) {
+    if (role === 'bunny' && room.state.bunny && room.state.bunny.playerCode !== socket.data.playerCode) {
       socket.emit('role_error', '兔子角色已被选择');
       console.log(`[SELECT_ROLE] 角色 ${role} 已被其他玩家占用`);
       return;
     }
 
-    // 分配角色（允许同一玩家选择两个角色 - 单机模式）
+    // 分配角色（使用 playerCode 而非 socketId）
     // 保留玩家传来的 isReady 状态
     if (role === 'fox') {
-      room.state.fox = { socketId: socket.id, player, isReady: player.isReady || false };
-      console.log(`[SELECT_ROLE] 分配狐狸角色，isReady=${player.isReady}`);
+      room.state.fox = {
+        socketId: socket.id,
+        playerCode: socket.data.playerCode,
+        player: { ...player, playerCode: socket.data.playerCode },
+        isReady: player.isReady || false
+      };
+      console.log(`[SELECT_ROLE] 分配狐狸角色，playerCode=${socket.data.playerCode}, isReady=${player.isReady}`);
     } else if (role === 'bunny') {
-      room.state.bunny = { socketId: socket.id, player, isReady: player.isReady || false };
-      console.log(`[SELECT_ROLE] 分配兔子角色，isReady=${player.isReady}`);
+      room.state.bunny = {
+        socketId: socket.id,
+        playerCode: socket.data.playerCode,
+        player: { ...player, playerCode: socket.data.playerCode },
+        isReady: player.isReady || false
+      };
+      console.log(`[SELECT_ROLE] 分配兔子角色，playerCode=${socket.data.playerCode}, isReady=${player.isReady}`);
     }
 
     socket.data.role = role;
     socket.data.player = player;
 
-    // 重要：使用玩家名字更新档案标识符（从 socket.id 切换到 player.name）
-    if (player.name) {
-      // 将旧 socket.id 的胡萝卜数量转移到玩家名字
-      const oldCarrotCount = carrotOps.getCount(socket.id);
-      if (oldCarrotCount > 0) {
-        // 转移胡萝卜
-        const stmt = db.prepare(`
-          INSERT INTO player_carrots (player_identifier, carrot_count, last_updated)
-          VALUES (?, ?, strftime('%s', 'now'))
-          ON CONFLICT(player_identifier) DO UPDATE SET
-            carrot_count = player_carrots.carrot_count + excluded.carrot_count,
-            last_updated = strftime('%s', 'now')
-        `);
-        stmt.run(player.name, oldCarrotCount);
-        // 清除旧标识的胡萝卜（避免重复）
-        db.prepare(`DELETE FROM player_carrots WHERE player_identifier = ?`).run(socket.id);
-      }
-      // 更新玩家档案
-      playerOps.upsert(player.name, { nickname: player.name });
-      console.log(`[SELECT_ROLE] 玩家档案已更新为：${player.name}`);
-    }
+    // 持久化到数据库（使用 vipRoomOps）
+    const foxPlayerCode = room.state.fox?.playerCode;
+    const bunnyPlayerCode = room.state.bunny?.playerCode;
+    const foxNickname = room.state.fox?.player?.nickname || player?.nickname;
+    const bunnyNickname = room.state.bunny?.player?.nickname || player?.nickname;
 
-    console.log(`[SELECT_ROLE] 玩家 ${socket.id} 成功选择角色：${role}, 玩家名字：${player.name}, isReady: ${player.isReady}`);
-
-    // 测试房间 000，朱迪选择时触发欢迎
-    if (roomId === '000' && role === 'bunny') {
-      console.log('[BIRTHDAY] 朱迪选择了兔子角色，准备发送生日欢迎！');
-      // 发送生日特效给客户端
-      io.to(roomId).emit('birthday_effect', { type: 'birthday', message: '生日快乐！' });
-    }
+    vipRoomOps.updatePlayers(roomId, foxPlayerCode, bunnyPlayerCode, foxNickname, bunnyNickname);
+    console.log(`[SELECT_ROLE] 房间状态已持久化到数据库`);
 
     // 同步房间状态给所有玩家（包括发送者）
     const syncData = {
@@ -186,7 +197,9 @@ io.on('connection', (socket) => {
       room.state.bunny.isReady = true;
     }
 
-    console.log(`玩家 ${socket.id} 已准备`);
+    // 持久化准备状态到数据库
+    vipRoomOps.updateReadyState(roomId, role, true);
+    console.log(`[PLAYER_READY] 玩家 ${socket.id} (${role}) 已准备，状态已持久化`);
 
     // 同步准备状态
     io.to(roomId).emit('sync_ready', {
@@ -320,7 +333,7 @@ io.on('connection', (socket) => {
     try {
       roomOps.create(roomId, password || '');
       // 创建 VIP 房间记录（永久保存）
-      vipRoomOps.create(roomId, socket.id, { name: roomId, bgImage: '' });
+      vipRoomOps.create(roomId, socket.id, password || '');
 
       socket.join(roomId);
       socket.data = { roomId, role: null, isPrivate: true };
@@ -379,6 +392,17 @@ io.on('connection', (socket) => {
 
     socket.join(roomId);
     socket.data = { roomId, role: null, isPrivate: true };
+
+    // 000 和 929 私密房间：每次加入时触发 生日特效
+    if (roomId === '000') {
+      console.log('[BIRTHDAY] 玩家加入私密房间 000，触发 生日欢迎！');
+      io.to(roomId).emit('birthday_effect', { type: 'birthday', message: '生日快乐！' });
+    }
+    if (roomId === '929') {
+      console.log('[BIRTHDAY_929] 玩家加入私密房间 929，触发 生日特效！');
+      io.to(roomId).emit('birthday_effect', { type: 'birthday', message: '生日快乐！' });
+      io.to(roomId).emit('timed_animation', { type: 'celebration', emoji: '🎂', message: '生日快乐！' });
+    }
 
     // 同步房间状态给新玩家
     const syncData = {
@@ -458,59 +482,63 @@ io.on('connection', (socket) => {
 
     console.log(`[CARROT] 结算游戏，胜利者：${winnerRole}`);
 
-    // 根据角色获取玩家标识（使用玩家名字作为持久化标识）
-    let winnerPlayerName = null;
-    let loserPlayerName = null;
+    // 根据角色获取玩家档案码（现在应该已经有 playerCode 了）
+    let winnerPlayerCode = null;
+    let loserPlayerCode = null;
+
     if (winnerRole === 'FOX' && room.state.fox) {
-      winnerPlayerName = room.state.fox.player?.name || room.state.fox.socketId;
-      loserPlayerName = room.state.bunny?.player?.name || room.state.bunny?.socketId;
+      winnerPlayerCode = room.state.fox.playerCode;
+      loserPlayerCode = room.state.bunny?.playerCode;
     } else if (winnerRole === 'BUNNY' && room.state.bunny) {
-      winnerPlayerName = room.state.bunny.player?.name || room.state.bunny.socketId;
-      loserPlayerName = room.state.fox?.player?.name || room.state.fox?.socketId;
+      winnerPlayerCode = room.state.bunny.playerCode;
+      loserPlayerCode = room.state.fox?.playerCode;
     }
 
-    if (winnerPlayerName) {
+    if (winnerPlayerCode) {
       // 给胜利者加胡萝卜
-      carrotOps.addCarrot(winnerPlayerName, 1);
-      const count = carrotOps.getCount(winnerPlayerName);
-      console.log(`[CARROT] 玩家 ${winnerPlayerName} 获得胡萝卜，总数：${count}`);
+      carrotOps.addCarrot(winnerPlayerCode, 1);
+      const count = carrotOps.getCount(winnerPlayerCode);
+      console.log(`[CARROT] 玩家 ${winnerPlayerCode} 获得胡萝卜，总数：${count}`);
 
       // 同步玩家档案中的胡萝卜数量
-      playerOps.update(winnerPlayerName, { carrot_count: count });
+      playerOps.update(winnerPlayerCode, { carrot_count: count });
 
-      // 记录游戏历史
-      const foxScore = room.state.fox?.player?.score || 0;
-      const bunnyScore = room.state.bunny?.player?.score || 0;
+      // 记录游戏历史（使用档案码）
+      const foxPlayer = room.state.fox?.player?.name || room.state.fox?.playerCode || room.state.fox?.socketId;
+      const bunnyPlayer = room.state.bunny?.player?.name || room.state.bunny?.playerCode || room.state.bunny?.socketId;
       gameHistoryOps.add({
         roomId,
-        foxPlayer: room.state.fox?.player?.name || room.state.fox?.socketId,
-        bunnyPlayer: room.state.bunny?.player?.name || room.state.bunny?.socketId,
+        foxPlayer,
+        bunnyPlayer,
         winner: winnerRole,
-        foxScore,
-        bunnyScore,
+        foxScore: room.state.fox?.player?.score || 0,
+        bunnyScore: room.state.bunny?.player?.score || 0,
         wordUsed: room.state.word?.char,
-        duration: 0 // TODO: 记录游戏时长
+        duration: 0
       });
 
       // 更新玩家统计（胜利者 +1 胜场，双方 +1 总场次）
-      if (winnerPlayerName) {
-        const winnerProfile = playerOps.get(winnerPlayerName);
-        playerOps.update(winnerPlayerName, {
-          total_games: (winnerProfile?.total_games || 0) + 1,
-          win_games: (winnerProfile?.win_games || 0) + 1
+      const winnerProfile = playerOps.get(winnerPlayerCode);
+      if (winnerProfile) {
+        playerOps.update(winnerPlayerCode, {
+          total_games: (winnerProfile.total_games || 0) + 1,
+          win_games: (winnerProfile.win_games || 0) + 1
         });
       }
-      if (loserPlayerName) {
-        const loserProfile = playerOps.get(loserPlayerName);
-        playerOps.update(loserPlayerName, {
-          total_games: (loserProfile?.total_games || 0) + 1
-        });
+
+      if (loserPlayerCode) {
+        const loserProfile = playerOps.get(loserPlayerCode);
+        if (loserProfile) {
+          playerOps.update(loserPlayerCode, {
+            total_games: (loserProfile.total_games || 0) + 1
+          });
+        }
       }
 
       // 通知所有玩家
       io.to(roomId).emit('carrot_awarded', {
         winnerRole,
-        winnerPlayerName,
+        winnerPlayerName: winnerPlayerCode,
         carrotCount: count
       });
     }
@@ -606,6 +634,13 @@ io.on('connection', (socket) => {
       }
     }
 
+    // 持久化游戏状态到数据库
+    vipRoomOps.updateGameState(roomId, {
+      word: word,
+      punishments: room.state.punishments,
+      game_state: 'playing'
+    });
+
     const finalPunishments = room.state.punishments || { truths: [], dares: [] };
     console.log(`房间 ${roomId} 游戏开始，词汇：${word.char}, 惩罚库：truths=${finalPunishments.truths.length}, dares=${finalPunishments.dares.length}`);
     io.to(roomId).emit('start_game', { word, punishments: finalPunishments });
@@ -624,6 +659,10 @@ io.on('connection', (socket) => {
     // 重置玩家准备状态
     if (room.state.fox) room.state.fox.isReady = false;
     if (room.state.bunny) room.state.bunny.isReady = false;
+
+    // 清除数据库中的游戏状态
+    vipRoomOps.clearGame(roomId);
+    console.log(`[RESET_GAME] 房间 ${roomId} 游戏已重置，状态已清除`);
 
     io.to(roomId).emit('reset_game');
   });
@@ -833,21 +872,29 @@ io.on('connection', (socket) => {
   });
 
   // 断开连接
-  socket.on('disconnect', () => {
-    const { roomId, role, isPrivate } = socket.data;
+  socket.on('disconnect', (reason) => {
+    const { roomId, role, isPrivate, playerCode } = socket.data;
     if (roomId) {
       const room = rooms.get(roomId);
       if (room) {
-        // 释放角色
-        if (role === 'fox') room.state.fox = null;
-        if (role === 'bunny') room.state.bunny = null;
+        // 私密房间：保留角色状态，不立即释放，只标记 socket 离线
+        if (isPrivate) {
+          // 记录玩家离线状态，但不释放角色
+          console.log(`私密房间 ${roomId} 玩家 ${socket.id} 离线，保留角色状态 (原因：${reason})`);
+          // 通知房间内其他玩家该玩家暂时离线（但不释放角色）
+          socket.to(roomId).emit('player_disconnected', {
+            role,
+            socketId: socket.id,
+            playerName: socket.data.player?.name
+          });
+        } else {
+          // 普通房间：立即释放角色
+          if (role === 'fox') room.state.fox = null;
+          if (role === 'bunny') room.state.bunny = null;
 
-        // 通知房间内其他玩家
-        socket.to(roomId).emit('player_left', { role });
+          // 通知房间内其他玩家
+          socket.to(roomId).emit('player_left', { role });
 
-        // 私密房间不删除，保留在内存中供下次登录
-        // 普通房间在空了才删除
-        if (!isPrivate) {
           // 如果房间空了，删除房间
           if (!room.state.fox && !room.state.bunny) {
             rooms.delete(roomId);
@@ -861,20 +908,171 @@ io.on('connection', (socket) => {
               bunnyReady: room.state.bunny?.isReady
             });
           }
-        } else {
-          // 私密房间：即使空了也保留，但需要同步状态（可能还有另一个玩家在）
-          console.log(`私密房间 ${roomId} 保留中...`);
-          // 同步剩余玩家状态
-          io.to(roomId).emit('sync_room', {
-            fox: room.state.fox ? { ...room.state.fox.player, socketId: room.state.fox.socketId } : null,
-            bunny: room.state.bunny ? { ...room.state.bunny.player, socketId: room.state.bunny.socketId } : null,
-            foxReady: room.state.fox?.isReady,
-            bunnyReady: room.state.bunny?.isReady
-          });
         }
       }
     }
-    console.log(`玩家断开：${socket.id}`);
+    console.log(`玩家断开：${socket.id}, 原因：${reason}`);
+  });
+
+  // 重连处理
+  socket.on('reconnect_attempt', (data) => {
+    console.log(`玩家 ${socket.id} 尝试重连...`);
+  });
+
+  socket.on('reconnect', () => {
+    console.log(`玩家 ${socket.id} 重连成功`);
+    // 尝试恢复房间状态
+    const { roomId, role, isPrivate, playerCode } = socket.data;
+    if (roomId && isPrivate) {
+      const room = rooms.get(roomId);
+      if (room) {
+        // 重新加入房间
+        socket.join(roomId);
+        // 恢复角色绑定
+        if (role === 'fox' && room.state.fox) {
+          room.state.fox.socketId = socket.id;
+        } else if (role === 'bunny' && room.state.bunny) {
+          room.state.bunny.socketId = socket.id;
+        }
+        // 同步房间状态
+        const syncData = {
+          fox: room.state.fox ? { ...room.state.fox.player, socketId: room.state.fox.socketId } : null,
+          bunny: room.state.bunny ? { ...room.state.bunny.player, socketId: room.state.bunny.socketId } : null,
+          foxReady: room.state.fox?.isReady,
+          bunnyReady: room.state.bunny?.isReady
+        };
+        socket.emit('sync_room', syncData);
+        // 获取历史消息
+        const history = messageOps.getHistory(roomId, 100);
+        socket.emit('chat_history', history);
+        console.log(`玩家 ${socket.id} 重连成功，恢复房间 ${roomId} 状态`);
+      }
+    }
+  });
+
+  // 重新加入私密房间（页面刷新后使用）
+  socket.on('rejoin_private_room', ({ roomId, playerCode }) => {
+    console.log(`[REJOIN] 玩家 ${playerCode} 尝试重新加入私密房间：${roomId}`);
+
+    // 验证档案码格式
+    if (!/^[a-zA-Z0-9]{6,8}$/.test(playerCode)) {
+      socket.emit('private_room_error', '档案码格式不正确');
+      return;
+    }
+
+    // 检查数据库是否有房间
+    const roomDb = vipRoomOps.get(roomId);
+    if (!roomDb) {
+      socket.emit('private_room_error', '房间不存在');
+      return;
+    }
+
+    // 验证玩家是否是房间成员
+    const isFoxPlayer = roomDb.fox_player_code === playerCode;
+    const isBunnyPlayer = roomDb.bunny_player_code === playerCode;
+    if (!isFoxPlayer && !isBunnyPlayer) {
+      socket.emit('private_room_error', '你不是该房间的玩家');
+      return;
+    }
+
+    console.log(`[REJOIN] 玩家 ${playerCode} 是房间成员，狐狸=${isFoxPlayer}, 兔子=${isBunnyPlayer}`);
+
+    // 检查内存中是否有房间，没有则从数据库恢复
+    let room = rooms.get(roomId);
+    if (!room) {
+      // 从数据库恢复房间到内存
+      rooms.set(roomId, {
+        players: [],
+        state: {
+          fox: roomDb.fox_player_code ? {
+            socketId: null,  // 等待重连
+            playerCode: roomDb.fox_player_code,
+            player: {
+              name: roomDb.fox_nickname || roomDb.fox_player_code,
+              nickname: roomDb.fox_nickname,
+              type: 'FOX',
+              playerCode: roomDb.fox_player_code
+            },
+            isReady: !!roomDb.fox_ready
+          } : null,
+          bunny: roomDb.bunny_player_code ? {
+            socketId: null,
+            playerCode: roomDb.bunny_player_code,
+            player: {
+              name: roomDb.bunny_nickname || roomDb.bunny_player_code,
+              nickname: roomDb.bunny_nickname,
+              type: 'BUNNY',
+              playerCode: roomDb.bunny_player_code
+            },
+            isReady: !!roomDb.bunny_ready
+          } : null,
+          word: roomDb.current_word ? JSON.parse(roomDb.current_word) : null,
+          punishments: roomDb.punishment_banks ? JSON.parse(roomDb.punishment_banks) : null
+        },
+        isPrivate: true
+      });
+      room = rooms.get(roomId);
+      console.log(`[REJOIN] 房间 ${roomId} 从数据库恢复`, {
+        fox: room.state.fox?.playerCode,
+        bunny: room.state.bunny?.playerCode,
+        word: room.state.word?.char
+      });
+    }
+
+    // 恢复角色绑定
+    if (isFoxPlayer && room.state.fox) {
+      room.state.fox.socketId = socket.id;
+      socket.data.role = 'fox';
+      socket.data.playerCode = playerCode;
+      socket.data.player = room.state.fox.player;
+    } else if (isBunnyPlayer && room.state.bunny) {
+      room.state.bunny.socketId = socket.id;
+      socket.data.role = 'bunny';
+      socket.data.playerCode = playerCode;
+      socket.data.player = room.state.bunny.player;
+    }
+
+    // 同步房间状态
+    socket.join(roomId);
+    socket.data = { ...socket.data, roomId, isPrivate: true };
+
+    const syncData = {
+      fox: room.state.fox ? { ...room.state.fox.player, socketId: room.state.fox.socketId } : null,
+      bunny: room.state.bunny ? { ...room.state.bunny.player, socketId: room.state.bunny.socketId } : null,
+      foxReady: room.state.fox?.isReady,
+      bunnyReady: room.state.bunny?.isReady
+    };
+    socket.emit('sync_room', syncData);
+
+    // 获取历史消息
+    const history = messageOps.getHistory(roomId, 100);
+
+    // 000 和 929 私密房间：重新加入时触发 生日特效
+    if (roomId === '000') {
+      console.log('[BIRTHDAY] 玩家重新加入私密房间 000，触发 生日欢迎！');
+      io.to(roomId).emit('birthday_effect', { type: 'birthday', message: '生日快乐！' });
+    }
+    if (roomId === '929') {
+      console.log('[BIRTHDAY_929] 玩家重新加入私密房间 929，触发 生日特效！');
+      io.to(roomId).emit('birthday_effect', { type: 'birthday', message: '生日快乐！' });
+      io.to(roomId).emit('timed_animation', { type: 'celebration', emoji: '🎂', message: '生日快乐！' });
+    }
+
+    socket.emit('private_room_joined', {
+      roomId,
+      bgImage: roomDb.bg_image || '',
+      history,
+      syncData
+    });
+
+    // 通知房间内其他玩家
+    socket.to(roomId).emit('player_rejoined', {
+      playerCode,
+      socketId: socket.id,
+      role: socket.data.role
+    });
+
+    console.log(`[REJOIN] 玩家 ${playerCode} 重新加入成功，角色：${socket.data.role}`);
   });
 });
 

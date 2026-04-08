@@ -291,13 +291,28 @@ const ArchiveRoom: React.FC<ArchiveRoomProps> = ({
 
                 <div className="flex items-center gap-6">
                   {/* 全身像 */}
-                  <div className="w-48 h-64 bg-gradient-to-b from-indigo-100 to-purple-100 rounded-3xl flex items-center justify-center text-8xl overflow-hidden">
+                  <div className="w-48 h-64 bg-gradient-to-b from-indigo-100 to-purple-100 rounded-3xl flex items-center justify-center text-8xl overflow-hidden relative">
                     {playerProfile.fullbodyImageUrl ? (
                       <img src={playerProfile.fullbodyImageUrl} alt="全身像" className="w-full h-full object-cover" />
                     ) : (
-                      <div className="text-center">
-                        <div className="text-6xl mb-2">🎭</div>
-                        <div className="text-sm text-slate-400">未设置</div>
+                      <div className="text-center p-4">
+                        <div className="text-7xl mb-2">
+                          {playerRole === 'FOX' ? '🦊' : playerRole === 'BUNNY' ? '🐰' : '🎭'}
+                        </div>
+                        <div className="text-xs text-slate-400 font-bold">
+                          {playerRole === 'FOX' ? '尼克' : playerRole === 'BUNNY' ? '朱迪' : '未设置角色'}
+                        </div>
+                      </div>
+                    )}
+                    {/* 穿戴装备叠加显示 */}
+                    {playerProfile.equippedHeadwearId && (
+                      <div className="absolute top-3 right-1/4 text-4xl filter drop-shadow-lg">
+                        {CLOTHING_ITEMS.find(i => i.id === playerProfile.equippedHeadwearId)?.icon}
+                      </div>
+                    )}
+                    {playerProfile.equippedClothesId && (
+                      <div className="absolute bottom-8 left-1/4 text-4xl filter drop-shadow-lg">
+                        {CLOTHING_ITEMS.find(i => i.id === playerProfile.equippedClothesId)?.icon}
                       </div>
                     )}
                   </div>
