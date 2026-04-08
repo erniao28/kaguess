@@ -567,6 +567,15 @@ const App: React.FC = () => {
   };
 
   const handlePlayerReady = (player: Player, extraWords: ForbiddenWord[], customPunishments: PunishmentBanks) => {
+    // 检查是否已登录档案
+    if (!playerProfile) {
+      console.log('[PROFILE] 未登录，先打开档案登录框');
+      setShowProfileModal(true);
+      // 保存待处理的角色选择，登录后继续
+      setPendingReadyAction({ player, extraWords, customPunishments });
+      return;
+    }
+
     const newPlayers = players.map(p => p.type === player.type ? player : p);
     setPlayers(newPlayers);
 
@@ -578,17 +587,59 @@ const App: React.FC = () => {
 
     const role = player.type === 'FOX' ? 'fox' : 'bunny';
 
-    // 使用完整的档案数据（如果已登录）
-    const playerWithProfile = playerProfile ? {
+    // 使用完整的档案数据（已登录）
+    const playerWithProfile = {
       ...player,
       playerCode: playerProfile.playerCode,
       nickname: playerProfile.nickname
-    } : player;
+    };
 
     socket?.emit('select_role', { roomId, role, player: playerWithProfile });
     socket?.emit('player_ready', { roomId, role });
     socket?.emit('game_message', { roomId, message: { type: 'UPDATE_PLAYER', player: playerWithProfile } });
     socket?.emit('game_message', { roomId, message: { type: 'SYNC_BANKS', extraWords, punishments: mergedPunishments } });
+  };
+
+  // 待处理的角色选择动作
+  const [pendingReadyAction, setPendingReadyAction] = useState<{
+    player: Player;
+    extraWords: ForbiddenWord[];
+    customPunishments: PunishmentBanks;
+  } | null>(null);
+
+  // 登录成功后执行待处理的操作
+  const handleProfileLoaded = (profile: any) => {
+    setPlayerProfile(profile);
+    setShowProfileModal(false);
+    console.log('[PROFILE] 档案已加载:', profile);
+
+    // 如果有待处理的操作，登录后继续执行
+    if (pendingReadyAction) {
+      console.log('[PROFILE] 执行待处理的角色选择');
+      const { player, extraWords, customPunishments } = pendingReadyAction;
+      setPendingReadyAction(null);
+
+      const newPlayers = players.map(p => p.type === player.type ? player : p);
+      setPlayers(newPlayers);
+
+      const mergedPunishments = {
+        truths: Array.from(new Set([...TRUTH_PUNISHMENTS, ...customPunishments.truths])),
+        dares: Array.from(new Set([...DARE_PUNISHMENTS, ...customPunishments.dares]))
+      };
+      setPunishmentBanks(mergedPunishments);
+
+      const role = player.type === 'FOX' ? 'fox' : 'bunny';
+      const playerWithProfile = {
+        ...player,
+        playerCode: profile.playerCode,
+        nickname: profile.nickname
+      };
+
+      socket?.emit('select_role', { roomId, role, player: playerWithProfile });
+      socket?.emit('player_ready', { roomId, role });
+      socket?.emit('game_message', { roomId, message: { type: 'UPDATE_PLAYER', player: playerWithProfile } });
+      socket?.emit('game_message', { roomId, message: { type: 'SYNC_BANKS', extraWords, punishments: mergedPunishments } });
+    }
   };
 
   const handleUpdateScore = (id: number, delta: number) => {
@@ -740,13 +791,6 @@ const App: React.FC = () => {
     setShowBirthdayGallery(false);
     setShowBirthdayEffect(false);
     setBirthdayAnimationStarted(false);
-  };
-
-  // 玩家档案系统处理函数
-  const handleProfileLoaded = (profile: any) => {
-    setPlayerProfile(profile);
-    setShowProfileModal(false);
-    console.log('[PROFILE] 档案已加载:', profile);
   };
 
   const handleOpenArchiveRoom = () => {
