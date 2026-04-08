@@ -189,7 +189,7 @@ async function initDatabase() {
 
   saveDatabase();
   console.log('[DB] 数据库初始化成功');
-  return db;
+  return _db;
 }
 
 // 保存数据库到文件
