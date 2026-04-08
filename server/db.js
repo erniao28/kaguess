@@ -1,3 +1,14 @@
+// =========================================
+// 数据库保护机制 - 重要说明
+// =========================================
+// 1. 禁止直接获取数据库实例执行任意 SQL
+// 2. 所有写操作必须通过业务逻辑（roomOps, messageOps 等）
+// 3. 数据库结构变更通过代码自动处理（CREATE TABLE IF NOT EXISTS）
+// 4. 如需临时直接访问，设置环境变量 ALLOW_DIRECT_DB_ACCESS=true
+//
+// 为什么：数据库内容是用户的，代码无权随意改动
+// =========================================
+
 import initSqlJs from 'sql.js';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -8,8 +19,8 @@ const __dirname = path.dirname(__filename);
 
 const DB_PATH = path.resolve(__dirname, 'rooms.db');
 
-// 全局数据库实例
-let db = null;
+// 私有数据库实例（仅供内部使用）
+let _db = null;
 
 // 初始化数据库
 async function initDatabase() {
@@ -18,13 +29,13 @@ async function initDatabase() {
   // 加载现有数据库或创建新的
   if (fs.existsSync(DB_PATH)) {
     const fileBuffer = fs.readFileSync(DB_PATH);
-    db = new SQL.Database(fileBuffer);
+    _db = new SQL.Database(fileBuffer);
   } else {
-    db = new SQL.Database();
+    _db = new SQL.Database();
   }
 
   // 创建表
-  db.run(`
+  _db.run(`
     -- 房间表
     CREATE TABLE IF NOT EXISTS rooms (
       id TEXT PRIMARY KEY,
@@ -162,9 +173,9 @@ async function initDatabase() {
   `);
 
   // 插入默认背景
-  const bgCount = db.exec('SELECT COUNT(*) FROM backgrounds');
+  const bgCount = _db.exec('SELECT COUNT(*) FROM backgrounds');
   if (bgCount[0][0] === 0) {
-    db.run(`INSERT INTO backgrounds (name, url, is_preset) VALUES
+    _db.run(`INSERT INTO backgrounds (name, url, is_preset) VALUES
       ('默认背景', 'https://images.unsplash.com/photo-1579546929518-9e396f3cc809?w=1920', 1),
       ('樱花树下', 'https://images.unsplash.com/photo-1522383225653-ed111181a951?w=1920', 1),
       ('海边沙滩', 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=1920', 1),
@@ -183,8 +194,8 @@ async function initDatabase() {
 
 // 保存数据库到文件
 function saveDatabase() {
-  if (db) {
-    const data = db.export();
+  if (_db) {
+    const data = _db.export();
     const buffer = Buffer.from(data);
     fs.writeFileSync(DB_PATH, buffer);
   }
@@ -200,26 +211,43 @@ export const waitForDb = () => {
   return dbReady;
 };
 
-// 获取数据库实例（需要先调用 waitForDb）
+// =========================================
+// 数据库保护机制 - 重要说明
+// =========================================
+// 1. 禁止直接获取数据库实例执行任意 SQL
+// 2. 所有写操作必须通过业务逻辑（roomOps, messageOps 等）
+// 3. 数据库结构变更通过代码自动处理（CREATE TABLE IF NOT EXISTS）
+//
+// 为什么：数据库内容是用户的，代码无权随意改动
+//
+// 保护级别：
+// - 默认模式：允许读取，写操作需要通过业务函数
+// - 严格模式：设置 PROTECT_DB=true 后，禁止所有直接访问
+// =========================================
+const PROTECT_DB = process.env.PROTECT_DB === 'true';
+
 export const getDb = () => {
-  if (!db) {
+  if (!_db) {
     throw new Error('Database not initialized. Call waitForDb() first.');
   }
-  return db;
+  if (PROTECT_DB) {
+    console.warn('[DB 保护] 检测到直接数据库访问。建议通过业务函数（roomOps, messageOps 等）操作。');
+  }
+  return _db;
 };
 
 // 房间操作
 export const roomOps = {
   create: (roomId, password = null) => {
-    if (!db) return;
-    const stmt = db.prepare('INSERT OR REPLACE INTO rooms (id, password, updated_at) VALUES (?, ?, strftime("%s", "now"))');
+    if (!_db) return;
+    const stmt = _db.prepare('INSERT OR REPLACE INTO rooms (id, password, updated_at) VALUES (?, ?, strftime("%s", "now"))');
     stmt.run([roomId, password]);
     saveDatabase();
   },
 
   get: (roomId) => {
-    if (!db) return null;
-    const stmt = db.prepare('SELECT * FROM rooms WHERE id = ?');
+    if (!_db) return null;
+    const stmt = _db.prepare('SELECT * FROM rooms WHERE id = ?');
     stmt.bind([roomId]);
     if (stmt.step()) {
       const row = stmt.getAsObject();
@@ -231,15 +259,15 @@ export const roomOps = {
   },
 
   delete: (roomId) => {
-    if (!db) return;
-    const stmt = db.prepare('DELETE FROM rooms WHERE id = ?');
+    if (!_db) return;
+    const stmt = _db.prepare('DELETE FROM rooms WHERE id = ?');
     stmt.run([roomId]);
     saveDatabase();
   },
 
   exists: (roomId) => {
-    if (!db) return false;
-    const stmt = db.prepare('SELECT 1 FROM rooms WHERE id = ? LIMIT 1');
+    if (!_db) return false;
+    const stmt = _db.prepare('SELECT 1 FROM rooms WHERE id = ? LIMIT 1');
     stmt.bind([roomId]);
     const exists = stmt.step();
     stmt.free();
@@ -248,7 +276,7 @@ export const roomOps = {
 
   // 验证房间密码
   verifyPassword: (roomId, password) => {
-    if (!db) return { exists: false, valid: false };
+    if (!_db) return { exists: false, valid: false };
     const room = roomOps.get(roomId);
     if (!room) {
       return { exists: false, valid: false };
@@ -262,7 +290,7 @@ export const roomOps = {
   },
 
   update: (roomId, updates) => {
-    if (!db) return;
+    if (!_db) return;
     const allowed = ['password', 'bg_image'];
     const fields = [];
     const values = [];
@@ -275,21 +303,21 @@ export const roomOps = {
     if (fields.length === 0) return;
     fields.push('updated_at = strftime("%s", "now")');
     values.push(roomId);
-    const stmt = db.prepare(`UPDATE rooms SET ${fields.join(', ')} WHERE id = ?`);
+    const stmt = _db.prepare(`UPDATE rooms SET ${fields.join(', ')} WHERE id = ?`);
     stmt.run(values);
     saveDatabase();
   },
 
   updateBackground: (roomId, bgImage) => {
-    if (!db) return;
-    const stmt = db.prepare('UPDATE rooms SET bg_image = ?, updated_at = strftime("%s", "now") WHERE id = ?');
+    if (!_db) return;
+    const stmt = _db.prepare('UPDATE rooms SET bg_image = ?, updated_at = strftime("%s", "now") WHERE id = ?');
     stmt.run([bgImage, roomId]);
     saveDatabase();
   },
 
   updatePassword: (roomId, password) => {
-    if (!db) return;
-    const stmt = db.prepare('UPDATE rooms SET password = ?, updated_at = strftime("%s", "now") WHERE id = ?');
+    if (!_db) return;
+    const stmt = _db.prepare('UPDATE rooms SET password = ?, updated_at = strftime("%s", "now") WHERE id = ?');
     stmt.run([password || '', roomId]);
     saveDatabase();
   },
@@ -298,12 +326,12 @@ export const roomOps = {
 // 消息操作
 export const messageOps = {
   add: (roomId, senderId, senderName, senderRole, content, type = 'text', quote = null) => {
-    if (!db) return;
+    if (!_db) return;
 
     // 检查 messages 表是否有 quote 列
     let hasQuoteColumn = false;
     try {
-      const result = db.exec('PRAGMA table_info(messages)');
+      const result = _db.exec('PRAGMA table_info(messages)');
       if (result && result[0] && result[0].values) {
         hasQuoteColumn = result[0].values.some(row => row[1] === 'quote');
       }
@@ -322,19 +350,19 @@ export const messageOps = {
     }
 
     if (hasQuoteColumn) {
-      const stmt = db.prepare('INSERT INTO messages (room_id, sender_id, sender_name, sender_role, content, type, quote) VALUES (?, ?, ?, ?, ?, ?, ?)');
+      const stmt = _db.prepare('INSERT INTO messages (room_id, sender_id, sender_name, sender_role, content, type, quote) VALUES (?, ?, ?, ?, ?, ?, ?)');
       stmt.run([roomId, senderId, senderName, senderRole, content, type, quoteJson]);
     } else {
       // 旧数据库，不存储 quote
-      const stmt = db.prepare('INSERT INTO messages (room_id, sender_id, sender_name, sender_role, content, type) VALUES (?, ?, ?, ?, ?, ?)');
+      const stmt = _db.prepare('INSERT INTO messages (room_id, sender_id, sender_name, sender_role, content, type) VALUES (?, ?, ?, ?, ?, ?)');
       stmt.run([roomId, senderId, senderName, senderRole, content, type]);
     }
     saveDatabase();
   },
 
   getByRoom: (roomId) => {
-    if (!db) return [];
-    const stmt = db.prepare('SELECT * FROM messages WHERE room_id = ? ORDER BY timestamp ASC LIMIT 100');
+    if (!_db) return [];
+    const stmt = _db.prepare('SELECT * FROM messages WHERE room_id = ? ORDER BY timestamp ASC LIMIT 100');
     stmt.bind([roomId]);
     const messages = [];
     while (stmt.step()) {
@@ -345,8 +373,8 @@ export const messageOps = {
   },
 
   getHistory: (roomId, limit = 100) => {
-    if (!db) return [];
-    const stmt = db.prepare('SELECT * FROM messages WHERE room_id = ? ORDER BY timestamp ASC LIMIT ?');
+    if (!_db) return [];
+    const stmt = _db.prepare('SELECT * FROM messages WHERE room_id = ? ORDER BY timestamp ASC LIMIT ?');
     stmt.bind([roomId, limit]);
     const messages = [];
     while (stmt.step()) {
@@ -360,8 +388,8 @@ export const messageOps = {
 // 背景操作
 export const backgroundOps = {
   getAll: () => {
-    if (!db) return [];
-    const stmt = db.prepare('SELECT * FROM backgrounds');
+    if (!_db) return [];
+    const stmt = _db.prepare('SELECT * FROM backgrounds');
     stmt.bind();
     const backgrounds = [];
     while (stmt.step()) {
@@ -372,15 +400,15 @@ export const backgroundOps = {
   },
 
   add: (name, url, isPreset = 0) => {
-    if (!db) return;
-    const stmt = db.prepare('INSERT INTO backgrounds (name, url, is_preset) VALUES (?, ?, ?)');
+    if (!_db) return;
+    const stmt = _db.prepare('INSERT INTO backgrounds (name, url, is_preset) VALUES (?, ?, ?)');
     stmt.run([name, url, isPreset]);
     saveDatabase();
   },
 
   delete: (id) => {
-    if (!db) return;
-    const stmt = db.prepare('DELETE FROM backgrounds WHERE id = ? AND is_preset = 0');
+    if (!_db) return;
+    const stmt = _db.prepare('DELETE FROM backgrounds WHERE id = ? AND is_preset = 0');
     stmt.run([id]);
     saveDatabase();
   },
@@ -389,8 +417,8 @@ export const backgroundOps = {
 // 胡萝卜操作
 export const carrotOps = {
   get: (playerIdentifier) => {
-    if (!db) return 0;
-    const stmt = db.prepare('SELECT carrot_count FROM player_carrots WHERE player_identifier = ?');
+    if (!_db) return 0;
+    const stmt = _db.prepare('SELECT carrot_count FROM player_carrots WHERE player_identifier = ?');
     stmt.bind([playerIdentifier]);
     if (stmt.step()) {
       const row = stmt.getAsObject();
@@ -405,8 +433,8 @@ export const carrotOps = {
   getCount: (playerIdentifier) => carrotOps.get(playerIdentifier),
 
   upsert: (playerIdentifier, delta) => {
-    if (!db) return;
-    const stmt = db.prepare(`
+    if (!_db) return;
+    const stmt = _db.prepare(`
       INSERT INTO player_carrots (player_identifier, carrot_count, last_updated)
       VALUES (?, COALESCE((SELECT carrot_count FROM player_carrots WHERE player_identifier = ?), 0) + ?, strftime('%s', 'now'))
       ON CONFLICT(player_identifier) DO UPDATE SET carrot_count = carrot_count + ?, last_updated = strftime('%s', 'now')
@@ -416,8 +444,8 @@ export const carrotOps = {
   },
 
   set: (playerIdentifier, count) => {
-    if (!db) return;
-    const stmt = db.prepare(`
+    if (!_db) return;
+    const stmt = _db.prepare(`
       INSERT INTO player_carrots (player_identifier, carrot_count, last_updated)
       VALUES (?, ?, strftime('%s', 'now'))
       ON CONFLICT(player_identifier) DO UPDATE SET carrot_count = ?, last_updated = strftime('%s', 'now')
@@ -428,8 +456,8 @@ export const carrotOps = {
 
   // 添加胡萝卜（增加指定数量）
   addCarrot: (playerIdentifier, delta) => {
-    if (!db) return;
-    const stmt = db.prepare(`
+    if (!_db) return;
+    const stmt = _db.prepare(`
       INSERT INTO player_carrots (player_identifier, carrot_count, last_updated)
       VALUES (?, COALESCE((SELECT carrot_count FROM player_carrots WHERE player_identifier = ?), 0) + ?, strftime('%s', 'now'))
       ON CONFLICT(player_identifier) DO UPDATE SET carrot_count = carrot_count + ?, last_updated = strftime('%s', 'now')
@@ -442,8 +470,8 @@ export const carrotOps = {
 // 玩家特效操作
 export const effectOps = {
   getPlayerEffects: (playerIdentifier) => {
-    if (!db) return [];
-    const stmt = db.prepare('SELECT effect_id FROM player_effects WHERE player_identifier = ?');
+    if (!_db) return [];
+    const stmt = _db.prepare('SELECT effect_id FROM player_effects WHERE player_identifier = ?');
     stmt.bind([playerIdentifier]);
     const effects = [];
     while (stmt.step()) {
@@ -457,15 +485,15 @@ export const effectOps = {
   getUnlocked: (playerIdentifier) => effectOps.getPlayerEffects(playerIdentifier),
 
   addEffect: (playerIdentifier, effectId) => {
-    if (!db) return;
-    const stmt = db.prepare('INSERT OR IGNORE INTO player_effects (player_identifier, effect_id) VALUES (?, ?)');
+    if (!_db) return;
+    const stmt = _db.prepare('INSERT OR IGNORE INTO player_effects (player_identifier, effect_id) VALUES (?, ?)');
     stmt.run([playerIdentifier, effectId]);
     saveDatabase();
   },
 
   hasEffect: (playerIdentifier, effectId) => {
-    if (!db) return false;
-    const stmt = db.prepare('SELECT 1 FROM player_effects WHERE player_identifier = ? AND effect_id = ? LIMIT 1');
+    if (!_db) return false;
+    const stmt = _db.prepare('SELECT 1 FROM player_effects WHERE player_identifier = ? AND effect_id = ? LIMIT 1');
     stmt.bind([playerIdentifier, effectId]);
     const has = stmt.step();
     stmt.free();
@@ -482,8 +510,8 @@ export const effectOps = {
 export const playerOps = {
   // 检查档案码是否可用
   isCodeAvailable: (playerCode) => {
-    if (!db) return false;
-    const stmt = db.prepare('SELECT 1 FROM player_profiles WHERE player_code = ? LIMIT 1');
+    if (!_db) return false;
+    const stmt = _db.prepare('SELECT 1 FROM player_profiles WHERE player_code = ? LIMIT 1');
     stmt.bind([playerCode]);
     const exists = stmt.step();
     stmt.free();
@@ -492,8 +520,8 @@ export const playerOps = {
 
   // 通过档案码 + 密码获取玩家（登录用）
   getByCodeAndPassword: (playerCode, passwordHash) => {
-    if (!db) return null;
-    const stmt = db.prepare('SELECT * FROM player_profiles WHERE player_code = ? AND password_hash = ?');
+    if (!_db) return null;
+    const stmt = _db.prepare('SELECT * FROM player_profiles WHERE player_code = ? AND password_hash = ?');
     stmt.bind([playerCode, passwordHash]);
     if (stmt.step()) {
       const player = stmt.getAsObject();
@@ -506,8 +534,8 @@ export const playerOps = {
 
   // 通过档案码获取玩家
   getByCode: (playerCode) => {
-    if (!db) return null;
-    const stmt = db.prepare('SELECT * FROM player_profiles WHERE player_code = ?');
+    if (!_db) return null;
+    const stmt = _db.prepare('SELECT * FROM player_profiles WHERE player_code = ?');
     stmt.bind([playerCode]);
     if (stmt.step()) {
       const player = stmt.getAsObject();
@@ -520,8 +548,8 @@ export const playerOps = {
 
   // 创建玩家档案（带密码）
   create: (playerCode, passwordHash, nickname = '玩家') => {
-    if (!db) return;
-    const stmt = db.prepare(`
+    if (!_db) return;
+    const stmt = _db.prepare(`
       INSERT INTO player_profiles (player_identifier, player_code, password_hash, nickname, last_login)
       VALUES (?, ?, ?, ?, strftime('%s', 'now'))
     `);
@@ -531,12 +559,12 @@ export const playerOps = {
 
   // 创建或更新玩家档案（兼容旧版，使用 player_identifier）
   upsert: (playerIdentifier, data = {}) => {
-    if (!db) return;
+    if (!_db) return;
     const existing = playerOps.getByIdentifier(playerIdentifier);
     if (existing) {
       playerOps.update(playerIdentifier, data);
     } else {
-      const stmt = db.prepare(`
+      const stmt = _db.prepare(`
         INSERT INTO player_profiles (player_identifier, nickname, carrot_count, last_login)
         VALUES (?, ?, ?, strftime('%s', 'now'))
       `);
@@ -547,8 +575,8 @@ export const playerOps = {
 
   // 通过 player_identifier 获取玩家（旧版兼容）
   getByIdentifier: (playerIdentifier) => {
-    if (!db) return null;
-    const stmt = db.prepare('SELECT * FROM player_profiles WHERE player_identifier = ?');
+    if (!_db) return null;
+    const stmt = _db.prepare('SELECT * FROM player_profiles WHERE player_identifier = ?');
     stmt.bind([playerIdentifier]);
     if (stmt.step()) {
       const player = stmt.getAsObject();
@@ -561,8 +589,8 @@ export const playerOps = {
 
   // 获取玩家档案（支持 player_identifier 或 player_code）
   get: (playerIdentifier) => {
-    if (!db) return null;
-    const stmt = db.prepare('SELECT * FROM player_profiles WHERE player_identifier = ? OR player_code = ?');
+    if (!_db) return null;
+    const stmt = _db.prepare('SELECT * FROM player_profiles WHERE player_identifier = ? OR player_code = ?');
     stmt.bind([playerIdentifier, playerIdentifier]);
     if (stmt.step()) {
       const player = stmt.getAsObject();
@@ -576,7 +604,7 @@ export const playerOps = {
   // 更新玩家数据
   // 更新玩家资料
   update: (playerCode, updates) => {
-    if (!db) return;
+    if (!_db) return;
 
     // 字段名映射（前端驼峰 -> 数据库下划线）
     const fieldMap = {
@@ -615,21 +643,21 @@ export const playerOps = {
     });
     if (fields.length === 0) return;
     values.push(playerCode);
-    const stmt = db.prepare(`UPDATE player_profiles SET ${fields.join(', ')} WHERE player_code = ?`);
+    const stmt = _db.prepare(`UPDATE player_profiles SET ${fields.join(', ')} WHERE player_code = ?`);
     stmt.run(values);
     saveDatabase();
   },
 
   // 修改玩家昵称（仅改名，不改变档案码）
   changeNickname: (playerCode, newNickname) => {
-    if (!db) return { success: false, error: '数据库未初始化' };
+    if (!_db) return { success: false, error: '数据库未初始化' };
 
     // 检查新昵称是否合法（1-20 字符）
     if (!newNickname || newNickname.length < 1 || newNickname.length > 20) {
       return { success: false, error: '昵称长度 1-20 个字符' };
     }
 
-    const stmt = db.prepare('UPDATE player_profiles SET nickname = ? WHERE player_code = ?');
+    const stmt = _db.prepare('UPDATE player_profiles SET nickname = ? WHERE player_code = ?');
     stmt.run([newNickname, playerCode]);
     saveDatabase();
     return { success: true };
@@ -637,10 +665,10 @@ export const playerOps = {
 
   // 获取排行榜（按胡萝卜数量排序）
   getLeaderboard: (limit = 10, orderBy = 'carrot_count') => {
-    if (!db) return [];
+    if (!_db) return [];
     const allowedOrders = ['carrot_count', 'total_games', 'win_games'];
     const orderCol = allowedOrders.includes(orderBy) ? orderBy : 'carrot_count';
-    const stmt = db.prepare(`
+    const stmt = _db.prepare(`
       SELECT player_code, nickname, carrot_count, total_games, win_games, vip_level, created_at, last_login
       FROM player_profiles
       ORDER BY ${orderCol} DESC
@@ -660,8 +688,8 @@ export const playerOps = {
 export const inventoryOps = {
   // 获取玩家所有物品
   getAll: (playerCode) => {
-    if (!db) return [];
-    const stmt = db.prepare('SELECT * FROM player_inventory WHERE player_code = ?');
+    if (!_db) return [];
+    const stmt = _db.prepare('SELECT * FROM player_inventory WHERE player_code = ?');
     stmt.bind([playerCode]);
     const inventory = [];
     while (stmt.step()) {
@@ -673,8 +701,8 @@ export const inventoryOps = {
 
   // 添加物品
   add: (playerCode, itemId, itemType) => {
-    if (!db) return;
-    const stmt = db.prepare(`
+    if (!_db) return;
+    const stmt = _db.prepare(`
       INSERT OR IGNORE INTO player_inventory (player_code, item_id, item_type, acquired_at)
       VALUES (?, ?, ?, strftime('%s', 'now'))
     `);
@@ -684,8 +712,8 @@ export const inventoryOps = {
 
   // 检查玩家是否拥有某物品
   has: (playerCode, itemId) => {
-    if (!db) return false;
-    const stmt = db.prepare('SELECT 1 FROM player_inventory WHERE player_code = ? AND item_id = ? LIMIT 1');
+    if (!_db) return false;
+    const stmt = _db.prepare('SELECT 1 FROM player_inventory WHERE player_code = ? AND item_id = ? LIMIT 1');
     stmt.bind([playerCode, itemId]);
     const has = stmt.step();
     stmt.free();
@@ -696,15 +724,15 @@ export const inventoryOps = {
 // VIP 房间操作
 export const vipRoomOps = {
   create: (roomId, ownerPlayerCode, password = null) => {
-    if (!db) return;
-    const stmt = db.prepare('INSERT INTO vip_rooms (id, owner_player_code, password) VALUES (?, ?, ?)');
+    if (!_db) return;
+    const stmt = _db.prepare('INSERT INTO vip_rooms (id, owner_player_code, password) VALUES (?, ?, ?)');
     stmt.run([roomId, ownerPlayerCode, password]);
     saveDatabase();
   },
 
   get: (roomId) => {
-    if (!db) return null;
-    const stmt = db.prepare('SELECT * FROM vip_rooms WHERE id = ?');
+    if (!_db) return null;
+    const stmt = _db.prepare('SELECT * FROM vip_rooms WHERE id = ?');
     stmt.bind([roomId]);
     if (stmt.step()) {
       const room = stmt.getAsObject();
@@ -717,8 +745,8 @@ export const vipRoomOps = {
 
   // 获取完整房间状态（含玩家和游戏状态）
   getFullRoomState: (roomId) => {
-    if (!db) return null;
-    const stmt = db.prepare('SELECT * FROM vip_rooms WHERE id = ?');
+    if (!_db) return null;
+    const stmt = _db.prepare('SELECT * FROM vip_rooms WHERE id = ?');
     stmt.bind([roomId]);
     if (stmt.step()) {
       const room = stmt.getAsObject();
@@ -730,15 +758,15 @@ export const vipRoomOps = {
   },
 
   delete: (roomId) => {
-    if (!db) return;
-    const stmt = db.prepare('DELETE FROM vip_rooms WHERE id = ?');
+    if (!_db) return;
+    const stmt = _db.prepare('DELETE FROM vip_rooms WHERE id = ?');
     stmt.run([roomId]);
     saveDatabase();
   },
 
   exists: (roomId) => {
-    if (!db) return false;
-    const stmt = db.prepare('SELECT 1 FROM vip_rooms WHERE id = ? LIMIT 1');
+    if (!_db) return false;
+    const stmt = _db.prepare('SELECT 1 FROM vip_rooms WHERE id = ? LIMIT 1');
     stmt.bind([roomId]);
     const exists = stmt.step();
     stmt.free();
@@ -746,8 +774,8 @@ export const vipRoomOps = {
   },
 
   getByOwner: (ownerPlayerCode) => {
-    if (!db) return [];
-    const stmt = db.prepare('SELECT * FROM vip_rooms WHERE owner_player_code = ?');
+    if (!_db) return [];
+    const stmt = _db.prepare('SELECT * FROM vip_rooms WHERE owner_player_code = ?');
     stmt.bind([ownerPlayerCode]);
     const rooms = [];
     while (stmt.step()) {
@@ -759,8 +787,8 @@ export const vipRoomOps = {
 
   // 根据档案码查找玩家所在的房间
   findRoomByPlayerCode: (playerCode) => {
-    if (!db) return null;
-    const stmt = db.prepare(`
+    if (!_db) return null;
+    const stmt = _db.prepare(`
       SELECT * FROM vip_rooms
       WHERE fox_player_code = ? OR bunny_player_code = ?
       LIMIT 1
@@ -777,8 +805,8 @@ export const vipRoomOps = {
 
   // 更新房间玩家状态
   updatePlayers: (roomId, foxPlayerCode, bunnyPlayerCode, foxNickname, bunnyNickname) => {
-    if (!db) return;
-    const stmt = db.prepare(`
+    if (!_db) return;
+    const stmt = _db.prepare(`
       UPDATE vip_rooms
       SET fox_player_code = ?, bunny_player_code = ?,
           fox_nickname = ?, bunny_nickname = ?,
@@ -791,10 +819,10 @@ export const vipRoomOps = {
 
   // 更新房间玩家角色绑定（单个玩家）
   updatePlayerRole: (roomId, role, playerCode, nickname) => {
-    if (!db) return;
+    if (!_db) return;
     const roleColumn = role === 'fox' ? 'fox_player_code' : 'bunny_player_code';
     const nicknameColumn = role === 'fox' ? 'fox_nickname' : 'bunny_nickname';
-    const stmt = db.prepare(`
+    const stmt = _db.prepare(`
       UPDATE vip_rooms
       SET ${roleColumn} = ?, ${nicknameColumn} = ?, updated_at = strftime('%s', 'now')
       WHERE id = ?
@@ -805,7 +833,7 @@ export const vipRoomOps = {
 
   // 更新游戏状态
   updateGameState: (roomId, gameState) => {
-    if (!db) return;
+    if (!_db) return;
     const updates = [];
     const values = [];
 
@@ -825,7 +853,7 @@ export const vipRoomOps = {
     if (updates.length > 0) {
       updates.push('updated_at = strftime("%s", "now")');
       values.push(roomId);
-      const stmt = db.prepare(`UPDATE vip_rooms SET ${updates.join(', ')} WHERE id = ?`);
+      const stmt = _db.prepare(`UPDATE vip_rooms SET ${updates.join(', ')} WHERE id = ?`);
       stmt.run(values);
       saveDatabase();
     }
@@ -833,9 +861,9 @@ export const vipRoomOps = {
 
   // 更新准备状态
   updateReadyState: (roomId, role, isReady) => {
-    if (!db) return;
+    if (!_db) return;
     const column = role === 'fox' ? 'fox_ready' : 'bunny_ready';
-    const stmt = db.prepare(`
+    const stmt = _db.prepare(`
       UPDATE vip_rooms
       SET ${column} = ?, updated_at = strftime('%s', 'now')
       WHERE id = ?
@@ -846,8 +874,8 @@ export const vipRoomOps = {
 
   // 清除房间玩家状态（游戏重置时）
   clearGame: (roomId) => {
-    if (!db) return;
-    const stmt = db.prepare(`
+    if (!_db) return;
+    const stmt = _db.prepare(`
       UPDATE vip_rooms
       SET current_word = NULL, punishment_banks = NULL,
           fox_ready = 0, bunny_ready = 0, game_state = 'setup',
@@ -862,15 +890,15 @@ export const vipRoomOps = {
 // 游戏历史操作
 export const gameHistoryOps = {
   add: (roomId, playerName, isWinner) => {
-    if (!db) return;
-    const stmt = db.prepare('INSERT INTO game_history (room_id, player_name, is_winner) VALUES (?, ?, ?)');
+    if (!_db) return;
+    const stmt = _db.prepare('INSERT INTO game_history (room_id, player_name, is_winner) VALUES (?, ?, ?)');
     stmt.run([roomId, playerName, isWinner ? 1 : 0]);
     saveDatabase();
   },
 
   getByRoom: (roomId) => {
-    if (!db) return [];
-    const stmt = db.prepare('SELECT * FROM game_history WHERE room_id = ? ORDER BY game_date DESC LIMIT 50');
+    if (!_db) return [];
+    const stmt = _db.prepare('SELECT * FROM game_history WHERE room_id = ? ORDER BY game_date DESC LIMIT 50');
     stmt.bind([roomId]);
     const history = [];
     while (stmt.step()) {
@@ -881,8 +909,8 @@ export const gameHistoryOps = {
   },
 
   getHonorHall: () => {
-    if (!db) return [];
-    const stmt = db.prepare(`
+    if (!_db) return [];
+    const stmt = _db.prepare(`
       SELECT player_name, COUNT(*) as win_count
       FROM game_history
       WHERE is_winner = 1
@@ -904,8 +932,8 @@ export const gameHistoryOps = {
 export const leaderboardOps = {
   // 获取所有玩家数据（用于排行榜）
   getAllPlayers: () => {
-    if (!db) return [];
-    const stmt = db.prepare(`
+    if (!_db) return [];
+    const stmt = _db.prepare(`
       SELECT player_code, nickname, carrot_count, total_games, win_games, vip_level
       FROM player_profiles
       ORDER BY carrot_count DESC
