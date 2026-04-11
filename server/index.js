@@ -57,7 +57,8 @@ io.on('connection', (socket) => {
         fox: null,
         bunny: null,
         word: null,
-        punishments: null
+        punishments: null,
+        gameState: 'setup'
       }
     });
 
@@ -111,10 +112,55 @@ io.on('connection', (socket) => {
 
   // 选择角色
   socket.on('select_role', ({ roomId, role, player }) => {
-    const room = rooms.get(roomId);
+    let room = rooms.get(roomId);
     if (!room) {
-      console.log(`[SELECT_ROLE] 房间 ${roomId} 不存在`);
-      return;
+      console.log(`[SELECT_ROLE] 房间 ${roomId} 不存在，尝试从数据库恢复`);
+      // 尝试从数据库恢复 VIP 房间
+      const roomDb = vipRoomOps.get(roomId);
+      if (roomDb) {
+        console.log(`[SELECT_ROLE] 从数据库恢复房间：${roomId}`);
+        rooms.set(roomId, {
+          players: [],
+          state: {
+            fox: roomDb.fox_player_code ? {
+              socketId: null,
+              playerCode: roomDb.fox_player_code,
+              player: {
+                name: roomDb.fox_nickname || roomDb.fox_player_code,
+                nickname: roomDb.fox_nickname,
+                type: 'FOX',
+                playerCode: roomDb.fox_player_code,
+                score: 0  // 初始化分数为 0
+              },
+              isReady: !!roomDb.fox_ready
+            } : null,
+            bunny: roomDb.bunny_player_code ? {
+              socketId: null,
+              playerCode: roomDb.bunny_player_code,
+              player: {
+                name: roomDb.bunny_nickname || roomDb.bunny_player_code,
+                nickname: roomDb.bunny_nickname,
+                type: 'BUNNY',
+                playerCode: roomDb.bunny_player_code,
+                score: 0  // 初始化分数为 0
+              },
+              isReady: !!roomDb.bunny_ready
+            } : null,
+            word: roomDb.current_word ? JSON.parse(roomDb.current_word) : null,
+            punishments: roomDb.punishment_banks ? JSON.parse(roomDb.punishment_banks) : null
+          },
+          isPrivate: true
+        });
+        room = rooms.get(roomId);
+        console.log(`[SELECT_ROLE] 房间恢复完成:`, {
+          fox: room.state.fox?.playerCode || '未选择',
+          bunny: room.state.bunny?.playerCode || '未选择'
+        });
+      } else {
+        console.log(`[SELECT_ROLE] 房间 ${roomId} 不存在于数据库`);
+        socket.emit('room_error', '房间不存在');
+        return;
+      }
     }
 
     console.log(`[SELECT_ROLE] 玩家 ${socket.id} 尝试选择角色：${role}, 房间状态：fox=${room.state.fox ? room.state.fox.playerCode || room.state.fox.socketId : 'null'}, bunny=${room.state.bunny ? room.state.bunny.playerCode || room.state.bunny.socketId : 'null'}`);
@@ -324,7 +370,8 @@ io.on('connection', (socket) => {
         fox: null,
         bunny: null,
         word: null,
-        punishments: null
+        punishments: null,
+        gameState: 'setup'
       },
       isPrivate: true
     });
@@ -374,17 +421,46 @@ io.on('connection', (socket) => {
       return;
     }
 
-    // 检查内存中是否有房间，没有则创建
+    // 检查内存中是否有房间，没有则从数据库恢复
     if (!rooms.has(roomId)) {
+      console.log(`[PRIVATE_ROOM] 内存中无房间，从数据库恢复：${roomId}`);
       rooms.set(roomId, {
         players: [],
         state: {
-          fox: null,
-          bunny: null,
-          word: null,
-          punishments: null
+          fox: roomDb.fox_player_code ? {
+            socketId: null,
+            playerCode: roomDb.fox_player_code,
+            player: {
+              name: roomDb.fox_nickname || roomDb.fox_player_code,
+              nickname: roomDb.fox_nickname,
+              type: 'FOX',
+              playerCode: roomDb.fox_player_code,
+              score: 0  // 初始化分数为 0
+            },
+            isReady: !!roomDb.fox_ready
+          } : null,
+          bunny: roomDb.bunny_player_code ? {
+            socketId: null,
+            playerCode: roomDb.bunny_player_code,
+            player: {
+              name: roomDb.bunny_nickname || roomDb.bunny_player_code,
+              nickname: roomDb.bunny_nickname,
+              type: 'BUNNY',
+              playerCode: roomDb.bunny_player_code,
+              score: 0  // 初始化分数为 0
+            },
+            isReady: !!roomDb.bunny_ready
+          } : null,
+          word: roomDb.current_word ? JSON.parse(roomDb.current_word) : null,
+          punishments: roomDb.punishment_banks ? JSON.parse(roomDb.punishment_banks) : null,
+          gameState: roomDb.game_state || 'setup'
         },
         isPrivate: true
+      });
+      console.log(`[PRIVATE_ROOM] 房间恢复完成:`, {
+        fox: rooms.get(roomId).state.fox?.playerCode || '未选择',
+        bunny: rooms.get(roomId).state.bunny?.playerCode || '未选择',
+        gameState: rooms.get(roomId).state.gameState || 'setup'
       });
     }
 
@@ -393,36 +469,40 @@ io.on('connection', (socket) => {
     socket.join(roomId);
     socket.data = { roomId, role: null, isPrivate: true };
 
-    // 000 和 929 私密房间：每次加入时触发 生日特效
+    // 000 私密房间：每次加入时触发 生日特效
     if (roomId === '000') {
       console.log('[BIRTHDAY] 玩家加入私密房间 000，触发 生日欢迎！');
       io.to(roomId).emit('birthday_effect', { type: 'birthday', message: '生日快乐！' });
     }
-    if (roomId === '929') {
-      console.log('[BIRTHDAY_929] 玩家加入私密房间 929，触发 生日特效！');
-      io.to(roomId).emit('birthday_effect', { type: 'birthday', message: '生日快乐！' });
-      io.to(roomId).emit('timed_animation', { type: 'celebration', emoji: '🎂', message: '生日快乐！' });
-    }
 
-    // 同步房间状态给新玩家
+    // 获取历史消息
+    const history = messageOps.getHistory(roomId, 100);
+
+    // 通知房间内其他玩家有新玩家加入（以便更新状态）
+    socket.to(roomId).emit('player_joined', { socketId: socket.id });
+
+    // 同步房间状态给**所有**玩家（包括新玩家和已存在的玩家）
+    // 这样两个用户都能看到对方的状态
     const syncData = {
       fox: room.state.fox ? { ...room.state.fox.player, socketId: room.state.fox.socketId } : null,
       bunny: room.state.bunny ? { ...room.state.bunny.player, socketId: room.state.bunny.socketId } : null,
       foxReady: room.state.fox?.isReady,
       bunnyReady: room.state.bunny?.isReady
     };
+    console.log(`[PRIVATE_ROOM] 加入成功，同步房间状态给所有玩家:`, JSON.stringify(syncData));
     io.to(roomId).emit('sync_room', syncData);
 
-    // 获取历史消息
-    const history = messageOps.getHistory(roomId, 100);
-
+    // 发送游戏恢复通知，包含游戏状态
     socket.emit('private_room_joined', {
       roomId,
       bgImage: roomDb.bg_image || '',
-      history
+      history,
+      syncData,
+      gameState: room.state.gameState || 'setup',
+      word: room.state.word ? room.state.word.char : null
     });
 
-    console.log(`[PRIVATE_ROOM] 加入成功：${roomId}`);
+    console.log(`[PRIVATE_ROOM] 加入成功：${roomId}, 游戏状态：${room.state.gameState}`);
   });
 
   // 获取房间信息
@@ -641,8 +721,11 @@ io.on('connection', (socket) => {
       game_state: 'playing'
     });
 
+    // 同时更新内存中的游戏状态
+    room.state.gameState = 'playing';
+
     const finalPunishments = room.state.punishments || { truths: [], dares: [] };
-    console.log(`房间 ${roomId} 游戏开始，词汇：${word.char}, 惩罚库：truths=${finalPunishments.truths.length}, dares=${finalPunishments.dares.length}`);
+    console.log(`房间 ${roomId} 游戏开始，词汇：${word.char}, 惩罚库：truths=${finalPunishments.truths.length}, dares=${finalPunishments.dares.length}, 状态：${room.state.gameState}`);
     io.to(roomId).emit('start_game', { word, punishments: finalPunishments });
   });
 
@@ -659,6 +742,10 @@ io.on('connection', (socket) => {
     // 重置玩家准备状态
     if (room.state.fox) room.state.fox.isReady = false;
     if (room.state.bunny) room.state.bunny.isReady = false;
+
+    // 重置内存中的游戏状态
+    room.state.gameState = 'setup';
+    room.state.word = null;
 
     // 清除数据库中的游戏状态
     vipRoomOps.clearGame(roomId);
@@ -882,6 +969,15 @@ io.on('connection', (socket) => {
         if (isPrivate) {
           // 记录玩家离线状态，但不释放角色
           console.log(`私密房间 ${roomId} 玩家 ${socket.id} 离线，保留角色状态 (原因：${reason})`);
+          // 保存游戏状态到数据库（确保重连时能恢复）
+          if (room.state.gameState === 'playing' || room.state.word) {
+            vipRoomOps.updateGameState(roomId, {
+              game_state: room.state.gameState || 'playing',
+              word: room.state.word,
+              punishments: room.state.punishments
+            });
+            console.log(`私密房间 ${roomId} 游戏状态已保存到数据库`);
+          }
           // 通知房间内其他玩家该玩家暂时离线（但不释放角色）
           socket.to(roomId).emit('player_disconnected', {
             role,
@@ -992,7 +1088,8 @@ io.on('connection', (socket) => {
               name: roomDb.fox_nickname || roomDb.fox_player_code,
               nickname: roomDb.fox_nickname,
               type: 'FOX',
-              playerCode: roomDb.fox_player_code
+              playerCode: roomDb.fox_player_code,
+              score: 0  // 初始化分数为 0
             },
             isReady: !!roomDb.fox_ready
           } : null,
@@ -1003,12 +1100,14 @@ io.on('connection', (socket) => {
               name: roomDb.bunny_nickname || roomDb.bunny_player_code,
               nickname: roomDb.bunny_nickname,
               type: 'BUNNY',
-              playerCode: roomDb.bunny_player_code
+              playerCode: roomDb.bunny_player_code,
+              score: 0  // 初始化分数为 0
             },
             isReady: !!roomDb.bunny_ready
           } : null,
           word: roomDb.current_word ? JSON.parse(roomDb.current_word) : null,
-          punishments: roomDb.punishment_banks ? JSON.parse(roomDb.punishment_banks) : null
+          punishments: roomDb.punishment_banks ? JSON.parse(roomDb.punishment_banks) : null,
+          gameState: roomDb.game_state || 'setup'
         },
         isPrivate: true
       });
@@ -1016,7 +1115,8 @@ io.on('connection', (socket) => {
       console.log(`[REJOIN] 房间 ${roomId} 从数据库恢复`, {
         fox: room.state.fox?.playerCode,
         bunny: room.state.bunny?.playerCode,
-        word: room.state.word?.char
+        word: room.state.word?.char,
+        gameState: room.state.gameState
       });
     }
 
@@ -1043,27 +1143,27 @@ io.on('connection', (socket) => {
       foxReady: room.state.fox?.isReady,
       bunnyReady: room.state.bunny?.isReady
     };
-    socket.emit('sync_room', syncData);
+
+    // 广播给所有玩家（包括重连玩家和其他已在线玩家）
+    io.to(roomId).emit('sync_room', syncData);
 
     // 获取历史消息
     const history = messageOps.getHistory(roomId, 100);
 
-    // 000 和 929 私密房间：重新加入时触发 生日特效
+    // 000 私密房间：重新加入时触发 生日特效
     if (roomId === '000') {
       console.log('[BIRTHDAY] 玩家重新加入私密房间 000，触发 生日欢迎！');
       io.to(roomId).emit('birthday_effect', { type: 'birthday', message: '生日快乐！' });
     }
-    if (roomId === '929') {
-      console.log('[BIRTHDAY_929] 玩家重新加入私密房间 929，触发 生日特效！');
-      io.to(roomId).emit('birthday_effect', { type: 'birthday', message: '生日快乐！' });
-      io.to(roomId).emit('timed_animation', { type: 'celebration', emoji: '🎂', message: '生日快乐！' });
-    }
 
+    // 发送游戏恢复通知，包含游戏状态
     socket.emit('private_room_joined', {
       roomId,
       bgImage: roomDb.bg_image || '',
       history,
-      syncData
+      syncData,
+      gameState: room.state.gameState || 'setup',
+      word: room.state.word ? room.state.word.char : null
     });
 
     // 通知房间内其他玩家
@@ -1073,7 +1173,7 @@ io.on('connection', (socket) => {
       role: socket.data.role
     });
 
-    console.log(`[REJOIN] 玩家 ${playerCode} 重新加入成功，角色：${socket.data.role}`);
+    console.log(`[REJOIN] 玩家 ${playerCode} 重新加入成功，角色：${socket.data.role}, 游戏状态：${room.state.gameState}`);
   });
 });
 
@@ -1097,10 +1197,33 @@ function restoreVipRooms() {
       rooms.set(room.id, {
         players: [],
         state: {
-          fox: null,
-          bunny: null,
-          word: null,
-          punishments: null
+          fox: room.fox_player_code ? {
+            socketId: null,
+            playerCode: room.fox_player_code,
+            player: {
+              name: room.fox_nickname || room.fox_player_code,
+              nickname: room.fox_nickname,
+              type: 'FOX',
+              playerCode: room.fox_player_code,
+              score: 0  // 初始化分数为 0
+            },
+            isReady: !!room.fox_ready
+          } : null,
+          bunny: room.bunny_player_code ? {
+            socketId: null,
+            playerCode: room.bunny_player_code,
+            player: {
+              name: room.bunny_nickname || room.bunny_player_code,
+              nickname: room.bunny_nickname,
+              type: 'BUNNY',
+              playerCode: room.bunny_player_code,
+              score: 0  // 初始化分数为 0
+            },
+            isReady: !!room.bunny_ready
+          } : null,
+          word: room.current_word ? JSON.parse(room.current_word) : null,
+          punishments: room.punishment_banks ? JSON.parse(room.punishment_banks) : null,
+          gameState: room.game_state || 'setup'
         },
         isPrivate: true
       });

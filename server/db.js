@@ -813,8 +813,16 @@ export const vipRoomOps = {
           updated_at = strftime('%s', 'now')
       WHERE id = ?
     `);
-    stmt.run([foxPlayerCode, bunnyPlayerCode, foxNickname, bunnyNickname, roomId]);
+    // 将 undefined 转换为 null，避免 SQLite 绑定错误
+    stmt.run([
+      foxPlayerCode ?? null,
+      bunnyPlayerCode ?? null,
+      foxNickname ?? null,
+      bunnyNickname ?? null,
+      roomId
+    ]);
     saveDatabase();
+    console.log(`[vipRoomOps.updatePlayers] 更新成功：roomId=${roomId}, fox=${foxPlayerCode}, bunny=${bunnyPlayerCode}`);
   },
 
   // 更新房间玩家角色绑定（单个玩家）

@@ -103,25 +103,9 @@ const App: React.FC = () => {
       }
     }
 
-    if (savedRoom && savedProfile) {
-      try {
-        const { roomId } = JSON.parse(savedRoom);
-        console.log('[PROFILE] 检测到已保存的房间:', roomId);
-        // 等待登录后重连
-        if (playerProfile) {
-          setTimeout(() => {
-            if (socket?.connected) {
-              console.log('[PROFILE] 尝试重新加入私密房间:', roomId);
-              socket.emit('rejoin_private_room', { roomId, playerCode: playerProfile.playerCode });
-            }
-          }, 1000);
-        }
-      } catch (e) {
-        console.error('[PROFILE] 解析保存的房间信息失败:', e);
-        localStorage.removeItem('private_room_info');
-      }
-    }
-  }, [socket, playerProfile]);
+    // 注意：重连房间的逻辑移到 login_result 事件中处理
+    // 这里不再依赖 playerProfile 状态，因为状态更新是异步的
+  }, [socket]);
 
   useEffect(() => {
     playerRoleRef.current = playerRole;
@@ -243,7 +227,14 @@ const App: React.FC = () => {
     });
 
     newSocket.on('player_joined', ({ socketId }) => {
-      console.log('新玩家加入:', socketId);
+      console.log('[PLAYER_JOINED] 新玩家加入:', socketId);
+      // 有新玩家加入时，请求房间状态同步
+      // 服务器会在 join_private_room 时广播 sync_room，这里主要是确保本地状态更新
+    });
+
+    // 玩家重新加入通知
+    newSocket.on('player_rejoined', ({ playerCode, socketId, role }) => {
+      console.log('[PLAYER_REJOINED] 玩家重新加入:', { playerCode, socketId, role });
     });
 
     newSocket.on('player_left', ({ role }) => {
@@ -345,8 +336,8 @@ const App: React.FC = () => {
       setChatMessages(history);
     });
 
-    newSocket.on('private_room_joined', ({ roomId, bgImage, history, syncData }) => {
-      console.log('[PRIVATE_ROOM] 加入成功:', roomId);
+    newSocket.on('private_room_joined', ({ roomId, bgImage, history, syncData, gameState, word }) => {
+      console.log('[PRIVATE_ROOM] 加入成功:', roomId, '游戏状态:', gameState, '词汇:', word, '同步数据:', syncData);
       setRoomId(roomId);
       setRoomBgImage(bgImage);
       setIsPrivateRoom(true);
@@ -354,11 +345,46 @@ const App: React.FC = () => {
         setChatMessages(history);
       }
       setShowPrivateRoomModal(false);
-      setGameState(GameState.SETUP);
 
-      // 如果有同步数据，处理一下
+      // 先处理同步数据，确保玩家分数等信息被正确设置
       if (syncData) {
-        console.log('[PRIVATE_ROOM] 房间同步数据:', syncData);
+        console.log('[PRIVATE_ROOM] 处理房间同步数据:', JSON.stringify(syncData));
+        const currentSocketId = newSocket.id;
+        const isFox = syncData.fox?.socketId === currentSocketId;
+        const isBunny = syncData.bunny?.socketId === currentSocketId;
+
+        // 设置玩家角色
+        if (isFox && isBunny) {
+          setPlayerRole('FOX');
+        } else if (isFox && playerRoleRef.current !== 'FOX') {
+          setPlayerRole('FOX');
+        } else if (isBunny && playerRoleRef.current !== 'BUNNY') {
+          setPlayerRole('BUNNY');
+        }
+
+        // 同步玩家数据（包括分数）
+        setPlayers(prev => prev.map(p => {
+          if (p.type === 'FOX' && syncData.fox) {
+            return { ...p, ...syncData.fox, type: 'FOX' as const, isReady: syncData.foxReady ?? p.isReady };
+          }
+          if (p.type === 'BUNNY' && syncData.bunny) {
+            return { ...p, ...syncData.bunny, type: 'BUNNY' as const, isReady: syncData.bunnyReady ?? p.isReady };
+          }
+          return p;
+        }));
+      }
+
+      // 根据游戏状态恢复前端状态
+      if (gameState === 'playing' && word) {
+        // 游戏正在进行中，恢复游戏状态
+        console.log('[PRIVATE_ROOM] 恢复游戏状态，词汇:', word);
+        setSessionWord(prev => ({ ...prev, char: word }));
+        // 直接恢复到 PLAYING 状态，而不是 TRANSITION
+        setTimeout(() => {
+          setGameState(GameState.PLAYING);
+        }, 100);
+      } else {
+        setGameState(GameState.SETUP);
       }
 
       // 保存房间信息到 localStorage，便于刷新后恢复
@@ -460,6 +486,22 @@ const App: React.FC = () => {
           nickname: result.player.nickname,
           passwordHash: result.player.passwordHash // 服务器返回的密码哈希
         }));
+
+        // 登录成功后，检查是否有保存的房间信息，有则尝试重连
+        const savedRoom = localStorage.getItem('private_room_info');
+        if (savedRoom) {
+          try {
+            const { roomId } = JSON.parse(savedRoom);
+            console.log('[PROFILE] 登录成功，尝试重新加入私密房间:', roomId);
+            // 稍等一下再重连，确保服务器已经完成登录处理
+            setTimeout(() => {
+              newSocket.emit('rejoin_private_room', { roomId, playerCode: result.player.playerCode });
+            }, 500);
+          } catch (e) {
+            console.error('[PROFILE] 解析保存的房间信息失败:', e);
+            localStorage.removeItem('private_room_info');
+          }
+        }
       }
     });
 
