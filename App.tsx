@@ -81,33 +81,19 @@ const App: React.FC = () => {
   const [chatBgImage, setChatBgImage] = useState('');
   const [notificationEnabled, setNotificationEnabled] = useState(false);
 
-  // 页面加载时检查是否有保存的登录状态和房间信息
+  // 页面加载时检查是否有保存的档案（仅用于日志，实际登录在 socket connect 事件中处理）
   useEffect(() => {
     const savedProfile = localStorage.getItem('player_profile');
-    const savedRoom = localStorage.getItem('private_room_info');
-
     if (savedProfile) {
       try {
         const profile = JSON.parse(savedProfile);
         console.log('[PROFILE] 检测到已保存的登录档案:', profile.playerCode);
-        // 自动尝试登录（socket 已在这个 useEffect 中初始化）
-        if (socket?.connected) {
-          console.log('[PROFILE] Socket 已连接，自动登录...');
-          socket.emit('login_player', {
-            playerCode: profile.playerCode,
-            password: profile.passwordHash
-          });
-        } else {
-          console.log('[PROFILE] Socket 未连接，等待连接后登录...');
-        }
       } catch (e) {
         console.error('[PROFILE] 解析保存的档案失败:', e);
         localStorage.removeItem('player_profile');
       }
     }
-
-    // 重连房间的逻辑移到 login_result 事件中处理
-  }, [socket]);
+  }, []);
 
   useEffect(() => {
     playerRoleRef.current = playerRole;

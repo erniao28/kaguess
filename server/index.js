@@ -294,6 +294,26 @@ io.on('connection', (socket) => {
       });
     }
 
+    // 如果是 ADD_SCORE 消息，在服务器端也更新分数并保存
+    if (message.type === 'ADD_SCORE') {
+      const { playerId, delta } = message;
+      // 根据 playerId 找到对应的玩家角色
+      const playerIndex = playerId === 1 ? 0 : 1;
+      const role = playerIndex === 0 ? 'fox' : 'bunny';
+
+      if (role === 'fox' && room.state.fox) {
+        room.state.fox.player.score = (room.state.fox.player.score || 0) + delta;
+        console.log(`[ADD_SCORE] 狐狸分数更新：${room.state.fox.player.score - delta} -> ${room.state.fox.player.score}`);
+        // 持久化分数到数据库
+        vipRoomOps.updateGameState(roomId, { fox_score: room.state.fox.player.score });
+      } else if (role === 'bunny' && room.state.bunny) {
+        room.state.bunny.player.score = (room.state.bunny.player.score || 0) + delta;
+        console.log(`[ADD_SCORE] 兔子分数更新：${room.state.bunny.player.score - delta} -> ${room.state.bunny.player.score}`);
+        // 持久化分数到数据库
+        vipRoomOps.updateGameState(roomId, { bunny_score: room.state.bunny.player.score });
+      }
+    }
+
     // 如果是 SYNC_BANKS 消息，合并存储到服务器
     if (message.type === 'SYNC_BANKS') {
       const { extraWords, punishments } = message;
