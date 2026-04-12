@@ -86,15 +86,10 @@ io.on('connection', (socket) => {
     // 先通知房间内其他玩家有新玩家加入
     socket.to(roomId).emit('player_joined', { socketId: socket.id });
 
-    // 000 和 929 房间：每次进入时触发 生日特效
+    // 000 房间：每次进入时触发 生日特效
     if (roomId === '000') {
       console.log('[BIRTHDAY] 玩家进入 000 测试房间，触发 生日欢迎！');
       io.to(roomId).emit('birthday_effect', { type: 'birthday', message: '生日快乐！' });
-    }
-    if (roomId === '929') {
-      console.log('[BIRTHDAY_929] 玩家进入 929 房间，触发 生日特效！');
-      io.to(roomId).emit('birthday_effect', { type: 'birthday', message: '生日快乐！' });
-      io.to(roomId).emit('timed_animation', { type: 'celebration', emoji: '🎂', message: '生日快乐！' });
     }
 
     // 再同步房间状态给新玩家（确保包含所有已选择的角色）
@@ -130,7 +125,7 @@ io.on('connection', (socket) => {
                 nickname: roomDb.fox_nickname,
                 type: 'FOX',
                 playerCode: roomDb.fox_player_code,
-                score: 0  // 初始化分数为 0
+                score: roomDb.fox_score || 0  // 从数据库读取分数
               },
               isReady: !!roomDb.fox_ready
             } : null,
@@ -142,7 +137,7 @@ io.on('connection', (socket) => {
                 nickname: roomDb.bunny_nickname,
                 type: 'BUNNY',
                 playerCode: roomDb.bunny_player_code,
-                score: 0  // 初始化分数为 0
+                score: roomDb.bunny_score || 0  // 从数据库读取分数
               },
               isReady: !!roomDb.bunny_ready
             } : null,
@@ -283,8 +278,12 @@ io.on('connection', (socket) => {
       const player = message.player;
       if (player.type === 'FOX' && room.state.fox) {
         room.state.fox.player = player;
+        // 持久化分数到数据库
+        vipRoomOps.updateGameState(roomId, { fox_score: player.score });
       } else if (player.type === 'BUNNY' && room.state.bunny) {
         room.state.bunny.player = player;
+        // 持久化分数到数据库
+        vipRoomOps.updateGameState(roomId, { bunny_score: player.score });
       }
       // 重新广播 sync_room，确保所有玩家看到最新数据
       io.to(roomId).emit('sync_room', {
@@ -435,7 +434,7 @@ io.on('connection', (socket) => {
               nickname: roomDb.fox_nickname,
               type: 'FOX',
               playerCode: roomDb.fox_player_code,
-              score: 0  // 初始化分数为 0
+              score: roomDb.fox_score || 0  // 从数据库读取分数
             },
             isReady: !!roomDb.fox_ready
           } : null,
@@ -447,7 +446,7 @@ io.on('connection', (socket) => {
               nickname: roomDb.bunny_nickname,
               type: 'BUNNY',
               playerCode: roomDb.bunny_player_code,
-              score: 0  // 初始化分数为 0
+              score: roomDb.bunny_score || 0  // 从数据库读取分数
             },
             isReady: !!roomDb.bunny_ready
           } : null,
@@ -1089,7 +1088,7 @@ io.on('connection', (socket) => {
               nickname: roomDb.fox_nickname,
               type: 'FOX',
               playerCode: roomDb.fox_player_code,
-              score: 0  // 初始化分数为 0
+              score: roomDb.fox_score || 0  // 从数据库读取分数
             },
             isReady: !!roomDb.fox_ready
           } : null,
@@ -1101,7 +1100,7 @@ io.on('connection', (socket) => {
               nickname: roomDb.bunny_nickname,
               type: 'BUNNY',
               playerCode: roomDb.bunny_player_code,
-              score: 0  // 初始化分数为 0
+              score: roomDb.bunny_score || 0  // 从数据库读取分数
             },
             isReady: !!roomDb.bunny_ready
           } : null,
@@ -1205,7 +1204,7 @@ function restoreVipRooms() {
               nickname: room.fox_nickname,
               type: 'FOX',
               playerCode: room.fox_player_code,
-              score: 0  // 初始化分数为 0
+              score: room.fox_score || 0  // 从数据库读取分数
             },
             isReady: !!room.fox_ready
           } : null,
@@ -1217,7 +1216,7 @@ function restoreVipRooms() {
               nickname: room.bunny_nickname,
               type: 'BUNNY',
               playerCode: room.bunny_player_code,
-              score: 0  // 初始化分数为 0
+              score: room.bunny_score || 0  // 从数据库读取分数
             },
             isReady: !!room.bunny_ready
           } : null,

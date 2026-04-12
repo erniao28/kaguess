@@ -157,6 +157,8 @@ async function initDatabase() {
       bunny_player_code TEXT,         -- 兔子角色玩家档案码
       fox_nickname TEXT,              -- 狐狸玩家昵称（用于显示）
       bunny_nickname TEXT,            -- 兔子玩家昵称（用于显示）
+      fox_score INTEGER DEFAULT 0,    -- 狐狸玩家分数
+      bunny_score INTEGER DEFAULT 0,  -- 兔子玩家分数
       current_word TEXT,              -- 当前词汇（JSON 字符串）
       punishment_banks TEXT,          -- 惩罚库（JSON 字符串）
       fox_ready INTEGER DEFAULT 0,    -- 狐狸准备状态
@@ -857,6 +859,14 @@ export const vipRoomOps = {
       updates.push('game_state = ?');
       values.push(gameState.game_state);
     }
+    if (gameState.fox_score !== undefined) {
+      updates.push('fox_score = ?');
+      values.push(gameState.fox_score);
+    }
+    if (gameState.bunny_score !== undefined) {
+      updates.push('bunny_score = ?');
+      values.push(gameState.bunny_score);
+    }
 
     if (updates.length > 0) {
       updates.push('updated_at = strftime("%s", "now")');
@@ -887,6 +897,7 @@ export const vipRoomOps = {
       UPDATE vip_rooms
       SET current_word = NULL, punishment_banks = NULL,
           fox_ready = 0, bunny_ready = 0, game_state = 'setup',
+          fox_score = 0, bunny_score = 0,
           updated_at = strftime('%s', 'now')
       WHERE id = ?
     `);
