@@ -29,6 +29,7 @@ interface ArchiveRoomProps {
   socket: any;
   onUpdateProfile: (updates: Partial<PlayerProfile>) => void;
   onChangeNickname?: (newNickname: string) => void;
+  onLogout?: () => void;
   playerRole?: 'FOX' | 'BUNNY';
 }
 
@@ -89,6 +90,7 @@ const ArchiveRoom: React.FC<ArchiveRoomProps> = ({
   socket,
   onUpdateProfile,
   onChangeNickname,
+  onLogout,
   playerRole = 'FOX'
 }) => {
   const [activeTab, setActiveTab] = useState<'profile' | 'appearance' | 'stats'>('profile');
@@ -223,18 +225,35 @@ const ArchiveRoom: React.FC<ArchiveRoomProps> = ({
                 )}
               </div>
             </div>
-            {/* 排行榜按钮 */}
-            <button
-              onClick={() => {
-                if (socket) {
-                  socket.emit('get_leaderboard');
-                }
-              }}
-              className="px-6 py-2 bg-white/20 hover:bg-white/30 rounded-full text-white font-bold transition-all flex items-center gap-2"
-              title="查看排行榜"
-            >
-              🏆 排行榜
-            </button>
+            {/* 右侧按钮组 */}
+            <div className="flex items-center gap-2">
+              {/* 排行榜按钮 */}
+              <button
+                onClick={() => {
+                  if (socket) {
+                    socket.emit('get_leaderboard');
+                  }
+                }}
+                className="px-6 py-2 bg-white/20 hover:bg-white/30 rounded-full text-white font-bold transition-all flex items-center gap-2"
+                title="查看排行榜"
+              >
+                🏆 排行榜
+              </button>
+              {/* 登出按钮 */}
+              {onLogout && (
+                <button
+                  onClick={() => {
+                    if (confirm('确定要退出登录吗？')) {
+                      onLogout();
+                    }
+                  }}
+                  className="px-6 py-2 bg-white/20 hover:bg-red-500/50 rounded-full text-white font-bold transition-all flex items-center gap-2"
+                  title="退出登录"
+                >
+                  🚪 退出
+                </button>
+              )}
+            </div>
           </div>
         </div>
 

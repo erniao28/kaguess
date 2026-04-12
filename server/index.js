@@ -973,9 +973,11 @@ io.on('connection', (socket) => {
             vipRoomOps.updateGameState(roomId, {
               game_state: room.state.gameState || 'playing',
               word: room.state.word,
-              punishments: room.state.punishments
+              punishments: room.state.punishments,
+              fox_score: room.state.fox?.player?.score,
+              bunny_score: room.state.bunny?.player?.score
             });
-            console.log(`私密房间 ${roomId} 游戏状态已保存到数据库`);
+            console.log(`私密房间 ${roomId} 游戏状态已保存到数据库，分数：fox=${room.state.fox?.player?.score}, bunny=${room.state.bunny?.player?.score}`);
           }
           // 通知房间内其他玩家该玩家暂时离线（但不释放角色）
           socket.to(roomId).emit('player_disconnected', {

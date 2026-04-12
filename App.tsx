@@ -90,12 +90,15 @@ const App: React.FC = () => {
       try {
         const profile = JSON.parse(savedProfile);
         console.log('[PROFILE] 检测到已保存的登录档案:', profile.playerCode);
-        // 自动尝试登录
+        // 自动尝试登录（socket 已在这个 useEffect 中初始化）
         if (socket?.connected) {
+          console.log('[PROFILE] Socket 已连接，自动登录...');
           socket.emit('login_player', {
             playerCode: profile.playerCode,
             password: profile.passwordHash
           });
+        } else {
+          console.log('[PROFILE] Socket 未连接，等待连接后登录...');
         }
       } catch (e) {
         console.error('[PROFILE] 解析保存的档案失败:', e);
@@ -103,8 +106,7 @@ const App: React.FC = () => {
       }
     }
 
-    // 注意：重连房间的逻辑移到 login_result 事件中处理
-    // 这里不再依赖 playerProfile 状态，因为状态更新是异步的
+    // 重连房间的逻辑移到 login_result 事件中处理
   }, [socket]);
 
   useEffect(() => {
@@ -132,6 +134,22 @@ const App: React.FC = () => {
     newSocket.on('connect', () => {
       console.log('[SOCKET] 已连接:', newSocket.id);
       setMySocketId(newSocket.id);
+
+      // 连接成功后，检查是否有保存的档案，有则自动登录
+      const savedProfile = localStorage.getItem('player_profile');
+      if (savedProfile) {
+        try {
+          const profile = JSON.parse(savedProfile);
+          console.log('[SOCKET] 连接成功，检测到已保存的档案，自动登录:', profile.playerCode);
+          newSocket.emit('login_player', {
+            playerCode: profile.playerCode,
+            password: profile.passwordHash
+          });
+        } catch (e) {
+          console.error('[SOCKET] 解析保存的档案失败:', e);
+          localStorage.removeItem('player_profile');
+        }
+      }
     });
 
     // 断线重连事件
@@ -843,6 +861,30 @@ const App: React.FC = () => {
     }
   };
 
+  // 登出处理
+  const handleLogout = () => {
+    // 清除本地保存的登录状态
+    localStorage.removeItem('player_profile');
+    // 清除保存的房间信息（因为已经退出了）
+    localStorage.removeItem('private_room_info');
+    // 清空本地状态
+    setPlayerProfile(null);
+    // 关闭档案室
+    setShowArchiveRoom(false);
+    // 重置游戏状态到初始房间选择界面
+    setGameState(GameState.ROOM);
+    setRoomId('');
+    setIsPrivateRoom(false);
+    setRoomBgImage('');
+    setChatMessages([]);
+    setPlayers([
+      { id: 1, name: '', score: 0, type: 'FOX', isReady: false },
+      { id: 2, name: '', score: 0, type: 'BUNNY', isReady: false },
+    ]);
+    setPlayerRole(null);
+    console.log('[PROFILE] 已退出登录');
+  };
+
   const handleUpdatePlayerProfile = (updates: any) => {
     setPlayerProfile((prev: any) => ({ ...prev, ...updates }));
   };
@@ -1236,6 +1278,7 @@ const App: React.FC = () => {
         socket={socket}
         onUpdateProfile={handleUpdatePlayerProfile}
         onChangeNickname={handleChangeNickname}
+        onLogout={handleLogout}
         playerRole={playerRole || undefined}
       />
 
