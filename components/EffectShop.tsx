@@ -5,6 +5,7 @@ interface EffectShopProps {
   isOpen: boolean;
   onClose: () => void;
   myCarrotCount: number;
+  myCheeseCount: number;
   unlockedEffects: string[];
   onPurchase: (effectId: string, cost: number) => void;
   onSelectEffect: (effectId: string) => void;
@@ -119,6 +120,15 @@ const DEFAULT_EFFECTS: Effect[] = [
     cost: 6,
     type: 'PENALTY',
     unlocked: false
+  },
+  {
+    id: 'poop-classic',
+    name: '扔大便',
+    description: '向对方扔出大便，恶心攻击',
+    icon: '💩',
+    cost: 10,
+    type: 'SCORE',
+    unlocked: false
   }
 ];
 
@@ -126,6 +136,7 @@ const EffectShop: React.FC<EffectShopProps> = ({
   isOpen,
   onClose,
   myCarrotCount,
+  myCheeseCount,
   unlockedEffects,
   onPurchase,
   onSelectEffect,
@@ -153,18 +164,18 @@ const EffectShop: React.FC<EffectShopProps> = ({
           </button>
           <div className="text-5xl mb-2">🏪</div>
           <h2 className="text-3xl font-black text-white">特效商店</h2>
-          <p className="text-purple-100 text-sm mt-1">用胡萝卜兑换特效</p>
+          <p className="text-purple-100 text-sm mt-1">用奶酪兑换特效</p>
         </div>
 
         {/* Content */}
         <div className="p-6 overflow-y-auto max-h-[60vh]">
-          {/* 胡萝卜余额 */}
+          {/* 奶酪余额 */}
           <div className="bg-white rounded-2xl p-4 mb-6 shadow-md border-4 border-yellow-200 flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <span className="text-4xl">🥕</span>
+              <span className="text-4xl">🧀</span>
               <div>
-                <div className="text-sm text-slate-400 font-bold">我的胡萝卜</div>
-                <div className="text-2xl font-black text-yellow-600">{myCarrotCount}</div>
+                <div className="text-sm text-slate-400 font-bold">我的奶酪</div>
+                <div className="text-2xl font-black text-yellow-600">{myCheeseCount}</div>
               </div>
             </div>
           </div>
@@ -208,7 +219,7 @@ const EffectShop: React.FC<EffectShopProps> = ({
             {filteredEffects.map(effect => {
               const isUnlocked = unlockedEffects.includes(effect.id);
               const isSelected = selectedEffectId === effect.id;
-              const canAfford = myCarrotCount >= effect.cost;
+              const canAfford = myCheeseCount >= effect.cost;
 
               return (
                 <div
@@ -261,9 +272,9 @@ const EffectShop: React.FC<EffectShopProps> = ({
                     </div>
                   ) : (
                     <div className={`flex items-center gap-1 text-sm font-black ${canAfford ? 'text-yellow-600' : 'text-slate-300'}`}>
-                      <span>🥕</span>
+                      <span>🧀</span>
                       <span>{effect.cost}</span>
-                      {!canAfford && <span className="text-xs text-rose-400 ml-1">(胡萝卜不足)</span>}
+                      {!canAfford && <span className="text-xs text-rose-400 ml-1">(奶酪不足)</span>}
                     </div>
                   )}
                 </div>

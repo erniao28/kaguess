@@ -23,10 +23,11 @@ const PlayerProfileModal: React.FC<PlayerProfileModalProps> = ({
   const [codeAvailable, setCodeAvailable] = useState<boolean | null>(null);
   const [generatedCode, setGeneratedCode] = useState('');
   const passwordRef = useRef<string>('');
+  const playerCodeRef = useRef<string>('');
 
   // 生成随机档案码
   const generatePlayerCode = () => {
-    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // 去掉易混淆的字符
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
     let code = '';
     for (let i = 0; i < 6; i++) {
       code += chars.charAt(Math.floor(Math.random() * chars.length));
@@ -42,75 +43,117 @@ const PlayerProfileModal: React.FC<PlayerProfileModalProps> = ({
     }
   }, [isOpen, mode]);
 
-  // 同步 passwordRef
+  // 同步 passwordRef 和 playerCodeRef
   useEffect(() => {
     passwordRef.current = password;
   }, [password]);
 
   useEffect(() => {
+    playerCodeRef.current = playerCode;
+  }, [playerCode]);
+
+  useEffect(() => {
     if (!socket) return;
 
-    // 监听档案码检查结果
-    socket.on('check_player_code_result', (result: { available: boolean; error?: string }) => {
+    let isMounted = true;
+
+    const handleCheckCodeResult = (result: { available: boolean; error?: string }) => {
       setCodeAvailable(result.available);
       if (result.error) {
         setError(result.error);
       }
-    });
+    };
 
-    // 监听创建结果
-    socket.on('player_profile_result', (result: { success: boolean; error?: string; playerCode?: string }) => {
-      setLoading(false);
+    const handleProfileResult = (result: { success: boolean; error?: string; playerCode?: string }) => {
+      if (isMounted) setLoading(false);
       if (result.success) {
-        // 创建成功后自动登录 - 使用 passwordRef 保存的密码值
         console.log('[PROFILE] 创建成功，准备自动登录:', result.playerCode);
         socket.emit('login_player', {
           playerCode: result.playerCode,
           password: passwordRef.current
         });
       } else {
-        setError(result.error || '创建失败');
+        if (isMounted) setError(result.error || '创建失败');
       }
-    });
+    };
 
-    // 监听登录结果
-    socket.on('login_result', (result: { success: boolean; error?: string; player?: any }) => {
+    const handleLoginResult = (result: { success: boolean; error?: string; player?: any }) => {
+      if (!isMounted) return;
       setLoading(false);
       if (result.success && result.player) {
+        // 先通知父组件加载档案，然后短暂延迟再关闭弹窗
+        // 确保父组件 state 更新后再卸载弹窗，避免状态丢失
         onProfileLoaded(result.player);
-        onClose();
+        setTimeout(() => {
+          if (isMounted) onClose();
+        }, 100);
       } else {
         setError(result.error || '登录失败');
       }
-    });
+    };
+
+    socket.on('check_player_code_result', handleCheckCodeResult);
+    socket.on('player_profile_result', handleProfileResult);
+    socket.on('login_result', handleLoginResult);
 
     return () => {
-      socket.off('check_player_code_result');
-      socket.off('player_profile_result');
-      socket.off('login_result');
+      isMounted = false;
+      socket.off('check_player_code_result', handleCheckCodeResult);
+      socket.off('player_profile_result', handleProfileResult);
+      socket.off('login_result', handleLoginResult);
     };
   }, [socket, onClose, onProfileLoaded]);
 
-  const handleCheckCode = (code: string) => {
-    if (!/^[a-zA-Z0-9]{6,8}$/.test(code)) {
-      setCodeAvailable(false);
-      setError('档案码格式不正确（6-8 位字母或数字）');
-      return;
+  // 档案码输入处理：使用 onInput 直接修改 DOM value，避免 onChange 的 React 受控组件光标跳位
+  // Bug 1 fix: 移动端浏览器对 onChange 中强制 value 变换会导致光标回到末尾
+  const handleCodeInput = (e: React.FormEvent<HTMLInputElement>) => {
+    const input = e.currentTarget;
+    const raw = input.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
+    // 保存光标位置
+    const cursorPos = input.selectionStart;
+    const oldLen = input.value.length;
+    // 更新 DOM value
+    input.value = raw;
+    // 计算删除的字符数
+    const deletedChars = oldLen - raw.length;
+    // 恢复光标位置
+    if (cursorPos !== null) {
+      const newPos = Math.max(0, Math.min(cursorPos - (deletedChars > 0 && cursorPos >= oldLen ? deletedChars : 0), raw.length));
+      input.setSelectionRange(newPos, newPos);
     }
-    setError('');
-    socket.emit('check_player_code', code);
+    setPlayerCode(raw);
   };
 
+  // 防抖检查档案码可用性
+  const checkCodeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   useEffect(() => {
-    const timer = setTimeout(() => {
-      if (playerCode.length >= 6) {
-        handleCheckCode(playerCode);
-      } else {
-        setCodeAvailable(null);
+    if (checkCodeTimerRef.current) {
+      clearTimeout(checkCodeTimerRef.current);
+    }
+
+    if (playerCode.length >= 6) {
+      checkCodeTimerRef.current = setTimeout(() => {
+        if (mode === 'create') {
+          if (!/^[a-zA-Z0-9]{6,8}$/.test(playerCode)) {
+            setCodeAvailable(false);
+            setError('档案码格式不正确（6-8 位字母或数字）');
+            return;
+          }
+          setError('');
+          socket.emit('check_player_code', playerCode);
+        }
+      }, 500);
+    } else {
+      setCodeAvailable(null);
+    }
+
+    return () => {
+      if (checkCodeTimerRef.current) {
+        clearTimeout(checkCodeTimerRef.current);
       }
-    }, 500);
-    return () => clearTimeout(timer);
-  }, [playerCode]);
+    };
+  }, [playerCode, mode, socket]);
 
   const handleCreate = () => {
     if (password !== confirmPassword) {
@@ -229,7 +272,7 @@ const PlayerProfileModal: React.FC<PlayerProfileModalProps> = ({
             </div>
           )}
 
-          {/* 档案码输入（创建和登录模式都需要） */}
+          {/* 档案码输入 */}
           <div>
             <label className="block text-sm font-bold text-slate-700 mb-2">
               档案码（6-8 位字母或数字）
@@ -238,7 +281,11 @@ const PlayerProfileModal: React.FC<PlayerProfileModalProps> = ({
               <input
                 type="text"
                 value={playerCode}
-                onChange={(e) => setPlayerCode(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ''))}
+                autoComplete="off"
+                autoCapitalize="off"
+                autoCorrect="off"
+                spellCheck="false"
+                onInput={handleCodeInput}
                 className={`flex-1 px-4 py-3 border-2 rounded-xl focus:outline-none focus:ring-2 font-mono text-lg tracking-wider ${
                   mode === 'create' && codeAvailable === false
                     ? 'border-rose-300 focus:border-rose-500 focus:ring-rose-200'
@@ -288,6 +335,10 @@ const PlayerProfileModal: React.FC<PlayerProfileModalProps> = ({
             <input
               type="password"
               value={password}
+              autoComplete="off"
+              autoCapitalize="off"
+              autoCorrect="off"
+              spellCheck="false"
               onChange={(e) => setPassword(e.target.value)}
               onKeyDown={handleKeyDown}
               placeholder={mode === 'create' ? "至少 4 位" : "输入密码"}

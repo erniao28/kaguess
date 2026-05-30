@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Player, PunishmentBanks } from '../types';
 
@@ -6,25 +5,69 @@ interface Props {
   loser: Player | null;
   punishmentBanks: PunishmentBanks;
   onClose: () => void;
+  socket: any;
+  roomId: string;
+  lastSelectedPunishment: { type: '真心话' | '大冒险'; content: string } | null;
+  playerRole?: 'FOX' | 'BUNNY' | null;
 }
 
-const PunishmentModal: React.FC<Props> = ({ loser, punishmentBanks, onClose }) => {
+const PunishmentModal: React.FC<Props> = ({
+  loser,
+  punishmentBanks,
+  onClose,
+  socket,
+  roomId,
+  lastSelectedPunishment,
+  playerRole = null
+}) => {
   const [selected, setSelected] = useState<{ type: '真心话' | '大冒险'; content: string } | null>(null);
+
+  // 判断当前玩家是否是输家（只有输家可以选择惩罚）
+  const isLoser = playerRole && loser && playerRole === loser.type;
+
+  // 当收到远程惩罚选择时，自动显示
+  React.useEffect(() => {
+    if (lastSelectedPunishment && !selected) {
+      console.log('[PUNISHMENT_MODAL] 收到远程惩罚选择:', lastSelectedPunishment);
+      setSelected({
+        type: lastSelectedPunishment.type,
+        content: lastSelectedPunishment.content
+      });
+    }
+  }, [lastSelectedPunishment, selected]);
 
   const handlePick = (type: 'TRUTH' | 'DARE') => {
     const list = type === 'TRUTH' ? punishmentBanks.truths : punishmentBanks.dares;
     if (list.length === 0) {
-      setSelected({
+      const emptyResult = {
         type: type === 'TRUTH' ? '真心话' : '大冒险',
         content: "库里居然空空如也！恭喜你，逃过一劫！"
-      });
+      };
+      setSelected(emptyResult);
+      // 同步给另一个玩家
+      if (socket && roomId) {
+        socket.emit('punishment_selected', {
+          roomId,
+          type,
+          content: emptyResult.content
+        });
+      }
       return;
     }
     const randomIndex = Math.floor(Math.random() * list.length);
-    setSelected({
+    const result = {
       type: type === 'TRUTH' ? '真心话' : '大冒险',
       content: list[randomIndex]
-    });
+    };
+    setSelected(result);
+    // 同步给另一个玩家
+    if (socket && roomId) {
+      socket.emit('punishment_selected', {
+        roomId,
+        type,
+        content: result.content
+      });
+    }
   };
 
   if (!loser) {
@@ -47,7 +90,7 @@ const PunishmentModal: React.FC<Props> = ({ loser, punishmentBanks, onClose }) =
       <div className="fixed inset-0 pointer-events-none z-[-1] opacity-20 bg-blue-600 animate-[pulse_1s_infinite_0.5s]" />
 
       <div className="bg-white rounded-[70px] w-full max-w-2xl p-12 shadow-[0_60px_150px_-30px_rgba(0,0,0,0.8)] border-[20px] border-slate-50 relative overflow-hidden my-auto animate-in zoom-in-95 duration-500">
-        
+
         {!selected ? (
           <div className="text-center">
             <div className="relative inline-block mb-10">
@@ -56,59 +99,88 @@ const PunishmentModal: React.FC<Props> = ({ loser, punishmentBanks, onClose }) =
                 输家判定
                </div>
             </div>
-            
+
             <h2 className="text-6xl font-black text-slate-900 mb-4 tracking-tighter">接受惩罚吧！</h2>
             <p className="text-slate-500 font-black uppercase tracking-[0.3em] mb-12 text-sm">
               <span className="text-rose-600 underline underline-offset-8 decoration-rose-200">{loser.name}</span> 分值最高 ({loser.score})
             </p>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-              <button
-                onClick={() => handlePick('TRUTH')}
-                className="group relative p-12 rounded-[55px] bg-indigo-50 border-4 border-indigo-200 hover:border-indigo-600 transition-all shadow-[0_20px_0_0_#e0e7ff] hover:shadow-none hover:translate-y-[20px] active:scale-95"
-              >
-                <div className="text-7xl mb-6 group-hover:scale-125 transition-transform duration-300">💬</div>
-                <div className="font-black text-3xl text-indigo-700">真心话</div>
-                <div className="text-[11px] font-black text-indigo-300 uppercase mt-3 tracking-widest">Truth Session</div>
-              </button>
-              
-              <button
-                onClick={() => handlePick('DARE')}
-                className="group relative p-12 rounded-[55px] bg-rose-50 border-4 border-rose-200 hover:border-rose-600 transition-all shadow-[0_20px_0_0_#ffe4e6] hover:shadow-none hover:translate-y-[20px] active:scale-95"
-              >
-                <div className="text-7xl mb-6 group-hover:scale-125 transition-transform duration-300">🔥</div>
-                <div className="font-black text-3xl text-rose-700">大冒险</div>
-                <div className="text-[11px] font-black text-rose-300 uppercase mt-3 tracking-widest">Dare Challenge</div>
-              </button>
-            </div>
+
+            {/* 只有输家可以选择惩罚，赢家只能等待 */}
+            {isLoser ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <button
+                  onClick={() => handlePick('TRUTH')}
+                  className="group relative p-12 rounded-[55px] bg-indigo-50 border-4 border-indigo-200 hover:border-indigo-600 transition-all shadow-[0_20px_0_0_#e0e7ff] hover:shadow-none hover:translate-y-[20px] active:scale-95"
+                >
+                  <div className="text-7xl mb-6 group-hover:scale-125 transition-transform duration-300">💬</div>
+                  <div className="font-black text-3xl text-indigo-700">真心话</div>
+                  <div className="text-[11px] font-black text-indigo-300 uppercase mt-3 tracking-widest">Truth Session</div>
+                </button>
+
+                <button
+                  onClick={() => handlePick('DARE')}
+                  className="group relative p-12 rounded-[55px] bg-rose-50 border-4 border-rose-200 hover:border-rose-600 transition-all shadow-[0_20px_0_0_#ffe4e6] hover:shadow-none hover:translate-y-[20px] active:scale-95"
+                >
+                  <div className="text-7xl mb-6 group-hover:scale-125 transition-transform duration-300">🔥</div>
+                  <div className="font-black text-3xl text-rose-700">大冒险</div>
+                  <div className="text-[11px] font-black text-rose-300 uppercase mt-3 tracking-widest">Dare Challenge</div>
+                </button>
+              </div>
+            ) : (
+              <div className="bg-slate-50 p-8 rounded-[40px] border-4 border-slate-200">
+                <div className="text-6xl mb-4 animate-pulse">⏳</div>
+                <p className="text-slate-600 font-black text-xl mb-2">等待输家选择惩罚</p>
+                <p className="text-slate-400 font-bold text-sm">{loser.name} 将选择真心话或大冒险</p>
+              </div>
+            )}
           </div>
         ) : (
           <div className="text-center animate-in fade-in slide-in-from-bottom-12 duration-600">
             <div className={`inline-flex items-center gap-4 px-10 py-4 rounded-full mb-12 font-black text-2xl tracking-[0.2em] uppercase shadow-2xl ${selected.type === '真心话' ? 'bg-indigo-600 text-white' : 'bg-rose-600 text-white'}`}>
               {selected.type === '真心话' ? '💬 真心话环节' : '🔥 大冒险挑战'}
             </div>
-            
+
             <div className="bg-[#f8fafc] p-12 rounded-[60px] mb-12 border-4 border-dashed border-slate-200 relative">
-               <div className="absolute -top-6 -left-6 text-6xl opacity-10">“</div>
+               <div className="absolute -top-6 -left-6 text-6xl opacity-10">"</div>
                <h3 className="text-4xl font-black text-slate-800 leading-[1.4] px-4 min-h-[160px] flex items-center justify-center">
                 {selected.content}
               </h3>
-               <div className="absolute -bottom-6 -right-6 text-6xl opacity-10">”</div>
+               <div className="absolute -bottom-6 -right-6 text-6xl opacity-10">"</div>
             </div>
 
             <div className="space-y-5">
-              <button
-                onClick={onClose}
-                className="w-full py-7 rounded-[40px] bg-slate-900 text-white font-black text-3xl hover:bg-black transition-all shadow-[0_12px_0_0_#000] active:shadow-none active:translate-y-[12px] flex items-center justify-center gap-5"
-              >
-                <span>🫡</span> 刑满释放，重新开始
-              </button>
-              <button 
-                onClick={() => setSelected(null)}
-                className="text-slate-400 font-black hover:text-rose-500 transition-colors text-sm uppercase tracking-widest"
-              >
-                换一个类型
-              </button>
+              {/* 只有输家能看到"刑满释放"按钮，赢家只能观看 */}
+              {isLoser ? (
+                <>
+                  <button
+                    onClick={onClose}
+                    className="w-full py-7 rounded-[40px] bg-slate-900 text-white font-black text-3xl hover:bg-black transition-all shadow-[0_12px_0_0_#000] active:shadow-none active:translate-y-[12px] flex items-center justify-center gap-5"
+                  >
+                    <span>🫡</span> 刑满释放，重新开始
+                  </button>
+                  <button
+                    onClick={() => setSelected(null)}
+                    className="text-slate-400 font-black hover:text-rose-500 transition-colors text-sm uppercase tracking-widest"
+                  >
+                    换一个类型
+                  </button>
+                </>
+              ) : (
+                <div className="bg-slate-50 p-8 rounded-[40px] border-4 border-slate-200">
+                  <div className="text-6xl mb-4 animate-pulse">👀</div>
+                  <p className="text-slate-600 font-black text-xl mb-2">观看对方接受惩罚</p>
+                  <p className="text-slate-400 font-bold text-sm">{loser.name} 正在完成惩罚挑战</p>
+                  <div className="mt-4 flex items-center justify-center gap-2">
+                    <span className="w-2 h-2 bg-indigo-500 rounded-full animate-pulse" />
+                    <span className="text-indigo-600 font-black text-sm">等待对方完成...</span>
+                  </div>
+                  {/* 赢家也能看到惩罚内容，确保实时同步 */}
+                  <div className="mt-6 bg-white p-6 rounded-[30px] border-2 border-indigo-100">
+                    <p className="text-xs font-black text-indigo-400 uppercase tracking-widest mb-3">当前惩罚内容</p>
+                    <p className="text-slate-700 font-bold text-lg">{selected.content}</p>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         )}

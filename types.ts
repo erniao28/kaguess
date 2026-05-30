@@ -22,6 +22,7 @@ export interface ForbiddenWord {
   frequency: string;
   difficulty: '简单' | '中等' | '极难' | '未知';
   description: string;
+  isSingleRound?: boolean;
 }
 
 export interface PunishmentBanks {
@@ -100,3 +101,6 @@ export interface LeaderboardEntry {
   carrotCount: number;
   lastUpdated: number;
 }
+
+// 你画我猜游戏模式
+export type GameMode = 'forbidden' | 'draw-guess';

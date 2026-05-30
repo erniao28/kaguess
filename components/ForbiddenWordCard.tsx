@@ -1,5 +1,5 @@
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { ForbiddenWord } from '../types';
 import { GeminiService } from '../services/geminiService';
 
@@ -11,6 +11,8 @@ const ForbiddenWordCard: React.FC<Props> = ({ word }) => {
   const [insight, setInsight] = useState<string>('正在向奥塔维亚寻求智慧...');
   const [loading, setLoading] = useState(true);
   const [isHolding, setIsHolding] = useState(false);
+  const holdRef = useRef(false);
+  const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const fetchInsight = async () => {
@@ -21,6 +23,38 @@ const ForbiddenWordCard: React.FC<Props> = ({ word }) => {
     };
     fetchInsight();
   }, [word]);
+
+  // 统一指针按下
+  const handlePointerDown = useCallback((e: React.PointerEvent) => {
+    e.preventDefault();
+    holdRef.current = true;
+    setIsHolding(true);
+  }, []);
+
+  // 统一指针抬起（不论在哪个元素上释放）
+  const handlePointerUp = useCallback((e: React.PointerEvent) => {
+    e.preventDefault();
+    holdRef.current = false;
+    setIsHolding(false);
+  }, []);
+
+  // 挂载全局 pointerup 防止在容器外释放时卡住
+  useEffect(() => {
+    const up = () => {
+      if (holdRef.current) {
+        holdRef.current = false;
+        setIsHolding(false);
+      }
+    };
+    window.addEventListener('pointerup', up);
+    window.addEventListener('pointercancel', up);
+    window.addEventListener('blur', up);
+    return () => {
+      window.removeEventListener('pointerup', up);
+      window.removeEventListener('pointercancel', up);
+      window.removeEventListener('blur', up);
+    };
+  }, []);
 
   return (
     <div className="bg-white rounded-[60px] shadow-[0_40px_100px_-20px_rgba(0,0,0,0.1)] p-12 w-full mx-auto border-[16px] border-slate-50 relative group transition-all hover:scale-[1.01]">
@@ -37,21 +71,22 @@ const ForbiddenWordCard: React.FC<Props> = ({ word }) => {
         </div>
 
         {/* 禁语字 - 带遮罩特效 */}
-        <div className="relative inline-block">
+        <div className="relative inline-block select-none" ref={containerRef}>
           <h1 className={`text-[12rem] font-black bg-gradient-to-b from-slate-900 via-indigo-950 to-indigo-800 bg-clip-text text-transparent mb-6 drop-shadow-2xl select-none leading-none animate-in fade-in zoom-in duration-1000 ${isHolding ? 'blur-none scale-100' : 'blur-sm scale-90'}`}>
             {word.char}
           </h1>
 
-          {/* 神秘遮罩 - 按住显示，松开恢复遮挡 */}
+          {/* 遮罩层 - 使用 pointerEvents 始终在顶层 */}
           <div
-            className={`absolute inset-0 flex items-center justify-center bg-gradient-to-br from-indigo-600/90 via-purple-600/90 to-pink-600/90 rounded-3xl cursor-pointer transition-all duration-300 hover:scale-105 hover:from-indigo-500 hover:via-purple-500 hover:to-pink-500 select-none ${
-              isHolding ? 'opacity-0 pointer-events-none' : 'opacity-100'
+            className={`absolute inset-0 flex items-center justify-center rounded-3xl transition-all duration-200 select-none ${
+              isHolding
+                ? 'opacity-0'
+                : 'opacity-100 cursor-pointer bg-gradient-to-br from-indigo-600/90 via-purple-600/90 to-pink-600/90 hover:scale-105 hover:from-indigo-500 hover:via-purple-500 hover:to-pink-500'
             }`}
-            onMouseDown={() => setIsHolding(true)}
-            onMouseUp={() => setIsHolding(false)}
-            onMouseLeave={() => setIsHolding(false)}
-            onTouchStart={() => setIsHolding(true)}
-            onTouchEnd={() => setIsHolding(false)}
+            style={{ pointerEvents: isHolding ? 'none' : 'auto', touchAction: 'none' }}
+            onPointerDown={handlePointerDown}
+            onPointerUp={handlePointerUp}
+            onPointerLeave={(e) => { if (holdRef.current) { e.preventDefault(); setIsHolding(false); holdRef.current = false; } }}
           >
               <div className="text-center pointer-events-none">
                 <div className="text-6xl mb-2 animate-pulse">🔮</div>

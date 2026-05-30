@@ -5,11 +5,13 @@ import { Player } from '../types';
 interface Props {
   player: Player;
   onUpdateScore: (id: number, delta: number) => void;
+  onUsePoop?: () => void;
+  canInteract?: boolean;
 }
 
-const ScoreBoard: React.FC<Props> = ({ player, onUpdateScore }) => {
+const ScoreBoard: React.FC<Props> = ({ player, onUpdateScore, onUsePoop, canInteract = true }) => {
   const isFox = player.type === 'FOX';
-  
+
   return (
     <div className={`flex-1 p-8 rounded-[50px] shadow-xl border-8 transition-all duration-500 ${isFox ? 'bg-[#FFF6E9] border-orange-200 hover:border-orange-400' : 'bg-[#EBF2FF] border-blue-200 hover:border-blue-400'} relative overflow-hidden group`}>
       {/* Dynamic Background Icon */}
@@ -27,7 +29,7 @@ const ScoreBoard: React.FC<Props> = ({ player, onUpdateScore }) => {
             {player.name}
           </h2>
         </div>
-        
+
         {/* Score Display */}
         <div className="relative mb-10 group/score">
            <div className={`absolute -inset-8 rounded-full blur-3xl opacity-30 transition-all group-hover/score:opacity-50 ${isFox ? 'bg-orange-400' : 'bg-blue-400'}`} />
@@ -40,7 +42,8 @@ const ScoreBoard: React.FC<Props> = ({ player, onUpdateScore }) => {
         <div className="flex flex-col gap-4 w-full">
           <button
             onClick={() => onUpdateScore(player.id, 1)}
-            className={`w-full py-5 rounded-[25px] flex items-center justify-center gap-3 text-lg font-black text-white transition-all active:scale-90 shadow-xl
+            disabled={!canInteract}
+            className={`w-full py-5 rounded-[25px] flex items-center justify-center gap-3 text-lg font-black text-white transition-all active:scale-90 shadow-xl disabled:opacity-50 disabled:cursor-not-allowed
               ${isFox ? 'bg-orange-500 hover:bg-orange-600 shadow-orange-200' : 'bg-blue-500 hover:bg-blue-600 shadow-blue-200'}`}
           >
             {isFox ? (
@@ -49,13 +52,29 @@ const ScoreBoard: React.FC<Props> = ({ player, onUpdateScore }) => {
               <><span>📄</span> 朱迪的罚单!</>
             )}
           </button>
-          
+
+          {/* 扔大便按钮 */}
+          {onUsePoop && canInteract && (
+            <button
+              onClick={onUsePoop}
+              className="w-full py-4 rounded-[25px] flex items-center justify-center gap-3 text-lg font-black text-white transition-all active:scale-90 shadow-xl bg-amber-600 hover:bg-amber-700 shadow-amber-200"
+            >
+              <span>💩</span> 扔大便!
+            </button>
+          )}
+
           <button
             onClick={() => onUpdateScore(player.id, -1)}
-            className="w-full py-3 rounded-2xl bg-white/60 text-slate-400 hover:text-slate-600 hover:bg-white transition-all text-xs font-bold uppercase tracking-widest border border-slate-200"
+            disabled={!canInteract}
+            className="w-full py-3 rounded-2xl bg-white/60 text-slate-400 hover:text-slate-600 hover:bg-white transition-all text-xs font-bold uppercase tracking-widest border border-slate-200 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             撤回误触
           </button>
+          {!canInteract && (
+            <div className="text-center text-amber-600 text-xs font-bold mt-2">
+              🔒 游客模式
+            </div>
+          )}
         </div>
         
         {/* Footnote */}

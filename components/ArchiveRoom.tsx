@@ -1,4 +1,38 @@
 import React, { useState } from 'react';
+import Character3D from './Character3D';
+import PetPanel from './PetPanel';
+
+// 错误边界 - 防止档案室白屏
+class ArchiveErrorBoundary extends React.Component<{children: React.ReactNode}, {hasError: boolean; error?: Error}> {
+  constructor(props: {children: React.ReactNode}) {
+    super(props);
+    this.state = { hasError: false };
+  }
+  static getDerivedStateFromError(error: Error) {
+    console.error('[ArchiveRoom] 渲染错误:', error);
+    return { hasError: true, error };
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-[40px] p-12 text-center shadow-2xl max-w-md">
+            <div className="text-6xl mb-4">⚠️</div>
+            <div className="text-xl font-black text-slate-700 mb-2">档案加载出错</div>
+            <div className="text-sm text-slate-500 mb-6">{this.state.error?.message || '未知错误'}</div>
+            <button
+              onClick={() => { this.setState({ hasError: false }); window.location.reload(); }}
+              className="px-8 py-3 bg-indigo-500 text-white font-black rounded-2xl hover:bg-indigo-600 transition-all"
+            >
+              刷新页面
+            </button>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 interface PlayerProfile {
   playerCode: string;
@@ -31,6 +65,7 @@ interface ArchiveRoomProps {
   onChangeNickname?: (newNickname: string) => void;
   onLogout?: () => void;
   playerRole?: 'FOX' | 'BUNNY';
+  onOpenCheeseBank?: () => void;
 }
 
 const HOBBY_OPTIONS = [
@@ -83,7 +118,7 @@ const CLOTHING_ITEMS = [
   { id: 'shoes_sandals', name: '凉鞋', icon: '👡', type: 'shoes' },
 ];
 
-const ArchiveRoom: React.FC<ArchiveRoomProps> = ({
+const ArchiveRoomInner: React.FC<ArchiveRoomProps> = ({
   isOpen,
   onClose,
   playerProfile,
@@ -91,18 +126,30 @@ const ArchiveRoom: React.FC<ArchiveRoomProps> = ({
   onUpdateProfile,
   onChangeNickname,
   onLogout,
-  playerRole = 'FOX'
+  playerRole = 'FOX',
+  onOpenCheeseBank
 }) => {
   const [activeTab, setActiveTab] = useState<'profile' | 'appearance' | 'stats'>('profile');
   const [isEditing, setIsEditing] = useState(false);
   const [editData, setEditData] = useState<Partial<PlayerProfile>>({});
   const [isChangingNickname, setIsChangingNickname] = useState(false);
   const [newNickname, setNewNickname] = useState('');
+  const [showPetPanel, setShowPetPanel] = useState(false);
 
-  if (!isOpen || !playerProfile) return null;
+  if (!isOpen) return null;
+  if (!playerProfile) {
+    return (
+      <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div className="bg-white rounded-[40px] p-12 text-center shadow-2xl">
+          <div className="text-6xl mb-4 animate-pulse">📂</div>
+          <div className="text-xl font-black text-slate-500">加载档案中...</div>
+        </div>
+      </div>
+    );
+  }
 
   const handleToggleHobby = (hobby: string) => {
-    const newHobbies = editData.hobbies || playerProfile.hobbies;
+    const newHobbies = editData.hobbies || playerProfile.hobbies || [];
     if (newHobbies.includes(hobby)) {
       setEditData({ ...editData, hobbies: newHobbies.filter(h => h !== hobby) });
     } else {
@@ -171,13 +218,20 @@ const ArchiveRoom: React.FC<ArchiveRoomProps> = ({
           </button>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
-              {/* 头像 */}
-              <div className="w-20 h-20 rounded-full bg-white/20 flex items-center justify-center text-4xl overflow-hidden">
+              {/* 头像 - 根据角色显示尼克或朱迪 */}
+              <div className="w-20 h-20 rounded-full bg-white/20 flex items-center justify-center text-4xl overflow-hidden relative">
                 {playerProfile.avatarUrl ? (
                   <img src={playerProfile.avatarUrl} alt="头像" className="w-full h-full object-cover" />
                 ) : (
-                  '👤'
+                  // 默认根据角色显示尼克或朱迪
+                  <span className="text-5xl">
+                    {playerRole === 'BUNNY' ? '🐰' : '🦊'}
+                  </span>
                 )}
+                {/* 角色角标 */}
+                <div className="absolute -bottom-1 -right-1 w-8 h-8 bg-white rounded-full flex items-center justify-center text-lg border-2 border-indigo-500">
+                  {playerRole === 'BUNNY' ? '🐰' : '🦊'}
+                </div>
               </div>
               <div className="flex items-center gap-3">
                 {isChangingNickname ? (
@@ -227,6 +281,24 @@ const ArchiveRoom: React.FC<ArchiveRoomProps> = ({
             </div>
             {/* 右侧按钮组 */}
             <div className="flex items-center gap-2">
+              {/* 奶酪央行按钮 */}
+              {onOpenCheeseBank && (
+                <button
+                  onClick={onOpenCheeseBank}
+                  className="px-6 py-2 bg-yellow-500/30 hover:bg-yellow-500/50 rounded-full text-white font-bold transition-all flex items-center gap-2"
+                  title="奶酪央行"
+                >
+                  🧀 奶酪央行
+                </button>
+              )}
+              {/* 宠物按钮 */}
+              <button
+                onClick={() => setShowPetPanel(true)}
+                className="px-6 py-2 bg-white/20 hover:bg-white/30 rounded-full text-white font-bold transition-all flex items-center gap-2"
+                title="我的宠物"
+              >
+                🐾 我的宠物
+              </button>
               {/* 排行榜按钮 */}
               <button
                 onClick={() => {
@@ -309,31 +381,16 @@ const ArchiveRoom: React.FC<ArchiveRoomProps> = ({
                 </div>
 
                 <div className="flex items-center gap-6">
-                  {/* 全身像 */}
-                  <div className="w-48 h-64 bg-gradient-to-b from-indigo-100 to-purple-100 rounded-3xl flex items-center justify-center text-8xl overflow-hidden relative">
-                    {playerProfile.fullbodyImageUrl ? (
-                      <img src={playerProfile.fullbodyImageUrl} alt="全身像" className="w-full h-full object-cover" />
-                    ) : (
-                      <div className="text-center p-4">
-                        <div className="text-7xl mb-2">
-                          {playerRole === 'FOX' ? '🦊' : playerRole === 'BUNNY' ? '🐰' : '🎭'}
-                        </div>
-                        <div className="text-xs text-slate-400 font-bold">
-                          {playerRole === 'FOX' ? '尼克' : playerRole === 'BUNNY' ? '朱迪' : '未设置角色'}
-                        </div>
-                      </div>
-                    )}
-                    {/* 穿戴装备叠加显示 */}
-                    {playerProfile.equippedHeadwearId && (
-                      <div className="absolute top-3 right-1/4 text-4xl filter drop-shadow-lg">
-                        {CLOTHING_ITEMS.find(i => i.id === playerProfile.equippedHeadwearId)?.icon}
-                      </div>
-                    )}
-                    {playerProfile.equippedClothesId && (
-                      <div className="absolute bottom-8 left-1/4 text-4xl filter drop-shadow-lg">
-                        {CLOTHING_ITEMS.find(i => i.id === playerProfile.equippedClothesId)?.icon}
-                      </div>
-                    )}
+                  {/* 全身像 - 使用 3D 角色组件 */}
+                  <div className="w-48 h-64 bg-gradient-to-b from-indigo-100 to-purple-100 rounded-3xl overflow-hidden relative border-4 border-white shadow-lg">
+                    <Character3D
+                      character={playerRole === 'FOX' ? 'FOX' : 'BUNNY'}
+                      equippedClothesId={playerProfile.equippedClothesId}
+                      equippedHeadwearId={playerProfile.equippedHeadwearId}
+                      equippedAccessoryId={playerProfile.equippedAccessoryId}
+                      equippedShoesId={playerProfile.equippedShoesId}
+                      fullbodyImageUrl={playerProfile.fullbodyImageUrl}
+                    />
                   </div>
 
                   {/* 身体数据 */}
@@ -430,7 +487,7 @@ const ArchiveRoom: React.FC<ArchiveRoomProps> = ({
                 <h3 className="text-lg font-black text-slate-700 mb-4">❤️ 我的爱好</h3>
                 <div className="flex flex-wrap gap-3">
                   {HOBBY_OPTIONS.map((hobby) => {
-                    const isSelected = (editData.hobbies ?? playerProfile.hobbies).includes(hobby.icon);
+                    const isSelected = (editData.hobbies ?? playerProfile.hobbies ?? []).includes(hobby.icon);
                     return (
                       <button
                         key={hobby.icon}
@@ -458,31 +515,16 @@ const ArchiveRoom: React.FC<ArchiveRoomProps> = ({
               <div className="bg-gradient-to-br from-indigo-50 to-purple-50 rounded-3xl p-6 shadow-lg border-4 border-indigo-200">
                 <h3 className="text-lg font-black text-slate-700 mb-4">🎭 角色形象</h3>
                 <div className="flex items-center gap-6">
-                  {/* 全身像预览 */}
-                  <div className="w-40 h-56 bg-gradient-to-b from-indigo-100 to-purple-100 rounded-3xl flex items-center justify-center text-7xl overflow-hidden relative">
-                    {playerProfile.fullbodyImageUrl ? (
-                      <img src={playerProfile.fullbodyImageUrl} alt="全身像" className="w-full h-full object-cover" />
-                    ) : (
-                      <div className="text-center p-4">
-                        <div className="text-5xl mb-2">
-                          {playerRole === 'FOX' ? '🦊' : '🐰'}
-                        </div>
-                        <div className="text-xs text-slate-400 font-bold">
-                          {playerRole === 'FOX' ? '尼克' : '朱迪'}
-                        </div>
-                      </div>
-                    )}
-                    {/* 穿戴装备叠加显示 */}
-                    {playerProfile.equippedHeadwearId && (
-                      <div className="absolute top-2 right-2 text-2xl">
-                        {CLOTHING_ITEMS.find(i => i.id === playerProfile.equippedHeadwearId)?.icon}
-                      </div>
-                    )}
-                    {playerProfile.equippedClothesId && (
-                      <div className="absolute bottom-2 left-2 text-2xl">
-                        {CLOTHING_ITEMS.find(i => i.id === playerProfile.equippedClothesId)?.icon}
-                      </div>
-                    )}
+                  {/* 3D 角色预览 */}
+                  <div className="w-40 h-56 bg-gradient-to-b from-indigo-100 to-purple-100 rounded-3xl overflow-hidden relative border-4 border-white shadow-lg">
+                    <Character3D
+                      character={playerRole === 'FOX' ? 'FOX' : 'BUNNY'}
+                      equippedClothesId={playerProfile.equippedClothesId}
+                      equippedHeadwearId={playerProfile.equippedHeadwearId}
+                      equippedAccessoryId={playerProfile.equippedAccessoryId}
+                      equippedShoesId={playerProfile.equippedShoesId}
+                      fullbodyImageUrl={playerProfile.fullbodyImageUrl}
+                    />
                   </div>
                   <div className="flex-1">
                     <div className="flex items-center gap-3 mb-4">
@@ -668,17 +710,17 @@ const ArchiveRoom: React.FC<ArchiveRoomProps> = ({
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                   <div className="text-center">
                     <div className="text-4xl mb-2">🥕</div>
-                    <div className="text-3xl font-black">{playerProfile.carrotCount}</div>
+                    <div className="text-3xl font-black">{playerProfile.carrotCount ?? 0}</div>
                     <div className="text-indigo-100 text-sm">胡萝卜</div>
                   </div>
                   <div className="text-center">
                     <div className="text-4xl mb-2">🎮</div>
-                    <div className="text-3xl font-black">{playerProfile.totalGames}</div>
+                    <div className="text-3xl font-black">{playerProfile.totalGames ?? 0}</div>
                     <div className="text-indigo-100 text-sm">总场次</div>
                   </div>
                   <div className="text-center">
                     <div className="text-4xl mb-2">🏆</div>
-                    <div className="text-3xl font-black">{playerProfile.winGames}</div>
+                    <div className="text-3xl font-black">{playerProfile.winGames ?? 0}</div>
                     <div className="text-indigo-100 text-sm">胜场</div>
                   </div>
                   <div className="text-center">
@@ -698,7 +740,7 @@ const ArchiveRoom: React.FC<ArchiveRoomProps> = ({
                   </div>
                   <div className="flex-1">
                     <div className="flex items-center justify-between mb-2">
-                      <span className="font-bold text-slate-700">LV.{playerProfile.vipLevel}</span>
+                      <span className="font-bold text-slate-700">LV.{playerProfile.vipLevel ?? 0}</span>
                       <span className="text-sm text-slate-400">下一等级：{playerProfile.vipLevel * 100} 胡萝卜</span>
                     </div>
                     <div className="h-3 bg-slate-200 rounded-full overflow-hidden">
@@ -741,8 +783,26 @@ const ArchiveRoom: React.FC<ArchiveRoomProps> = ({
           )}
         </div>
       </div>
+
+      {/* 宠物面板 */}
+      {showPetPanel && (
+        <PetPanel
+          playerCode={playerProfile.playerCode}
+          socket={socket}
+          onClose={() => setShowPetPanel(false)}
+        />
+      )}
     </div>
   );
 };
 
-export default ArchiveRoom;
+export default function ArchiveRoomWrapper(props: ArchiveRoomProps) {
+  return (
+    <ArchiveErrorBoundary>
+      <ArchiveRoomInner {...props} />
+    </ArchiveErrorBoundary>
+  );
+}
+
+// 保留别名兼容
+const ArchiveRoom = ArchiveRoomWrapper;
