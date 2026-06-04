@@ -35,6 +35,8 @@ interface ChatRoomProps {
   onPlaceFurniture?: (itemId: string) => void;
   onRemoveFurniture?: (furnitureId: string) => void;
   ownedFurniture?: string[];
+  notificationEnabled?: boolean;
+  onToggleNotification?: () => void;
 }
 
 const SCENE_CHARS = [
@@ -663,7 +665,8 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
                 myPlayerCode={myPlayerCode}
                 chatFontSize={14}
                 chatFontColor="#3e2723"
-                notificationEnabled={false}
+                notificationEnabled={notificationEnabled ?? false}
+                onToggleNotification={onToggleNotification}
                 canInteract={true}
                 warmTheme={true}
               />

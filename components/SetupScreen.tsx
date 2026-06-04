@@ -19,6 +19,8 @@ interface Props {
   onSendMessage?: (content: string, type: 'text' | 'emoji' | 'image') => void;
   mySocketId?: string | null;
   myPlayerCode?: string | null;
+  notificationEnabled?: boolean;
+  onToggleNotification?: () => void;
 }
 
 const SetupScreen: React.FC<Props> = ({
@@ -36,7 +38,9 @@ const SetupScreen: React.FC<Props> = ({
   chatMessages = [],
   onSendMessage,
   mySocketId,
-  myPlayerCode
+  myPlayerCode,
+  notificationEnabled,
+  onToggleNotification
 }) => {
   const [customWordsText, setCustomWordsText] = useState('');
   const [customTruthsText, setCustomTruthsText] = useState('');
@@ -440,6 +444,8 @@ const SetupScreen: React.FC<Props> = ({
           myPlayerCode={myPlayerCode || null}
           chatFontSize={14}
           chatFontColor="#1e293b"
+          notificationEnabled={notificationEnabled}
+          onToggleNotification={onToggleNotification}
           canInteract={!!playerProfile}
         />
       </div>

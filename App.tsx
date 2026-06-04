@@ -2147,6 +2147,8 @@ const App: React.FC = () => {
           onPlaceFurniture={handlePlaceFurniture}
           onRemoveFurniture={handleRemoveFurniture}
           ownedFurniture={ownedFurniture}
+          notificationEnabled={notificationEnabled}
+          onToggleNotification={() => setNotificationEnabled(!notificationEnabled)}
         />
       </div>
 
@@ -2374,6 +2376,8 @@ const App: React.FC = () => {
           onPlaceFurniture={handlePlaceFurniture}
           onRemoveFurniture={handleRemoveFurniture}
           ownedFurniture={ownedFurniture}
+          notificationEnabled={notificationEnabled}
+          onToggleNotification={() => setNotificationEnabled(!notificationEnabled)}
         />
         </div>
       )}
@@ -2476,6 +2480,8 @@ const App: React.FC = () => {
           onSendMessage={handleSendMessage}
           mySocketId={mySocketId}
           myPlayerCode={playerProfile?.playerCode || null}
+          notificationEnabled={notificationEnabled}
+          onToggleNotification={() => setNotificationEnabled(!notificationEnabled)}
         />
       )}
 
